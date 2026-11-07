@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models.reading import DeletedReading, MeterReading
+from app.models.reading import MIDNIGHT, DeletedReading, MeterReading
 from app.schemas.reading import ReadingCreate, ReadingOut
 from app.services.validation import ReadingValidationError, validate_new_reading
 
@@ -15,14 +15,17 @@ router = APIRouter(prefix="/api/readings", tags=["readings"])
 
 @router.post("", response_model=ReadingOut, status_code=status.HTTP_201_CREATED)
 def create_reading(payload: ReadingCreate, db: Session = Depends(get_db)):
-    """Registra una lectura. Valida contra la última registrada.
+    """Registra una lectura. Valida contra la última registrada por fecha+hora.
 
-    La validación aplicativa y la restricción UNIQUE de la base se complementan:
-    la UNIQUE protege contra dos POST simultáneos que pasen la validación a la
-    vez (condición de carrera)."""
+    Se permiten varias lecturas el mismo día con horas distintas. La UNIQUE
+    (reading_date, reading_time) protege contra duplicados exactos y contra dos
+    POST simultáneos que pasen la validación a la vez."""
+    reading_time = payload.reading_time or MIDNIGHT
+
     last = db.execute(
-        select(MeterReading)
-        .order_by(MeterReading.reading_date.desc(), MeterReading.id.desc())
+        select(MeterReading).order_by(
+            MeterReading.reading_date.desc(), MeterReading.reading_time.desc()
+        )
     ).scalars().first()
 
     try:
@@ -31,12 +34,15 @@ def create_reading(payload: ReadingCreate, db: Session = Depends(get_db)):
             payload.value_kwh,
             last.reading_date if last else None,
             float(last.value_kwh) if last else None,
+            new_time=reading_time,
+            prev_time=last.reading_time if last else None,
         )
     except ReadingValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     reading = MeterReading(
         reading_date=payload.reading_date,
+        reading_time=reading_time,
         value_kwh=payload.value_kwh,
         note=payload.note,
     )
@@ -44,11 +50,10 @@ def create_reading(payload: ReadingCreate, db: Session = Depends(get_db)):
     try:
         db.commit()
     except IntegrityError:
-        # La UNIQUE de reading_date la disparó: ya existe una lectura ese día.
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Ya existe una lectura para esa fecha.",
+            detail="Ya existe una lectura para esa fecha y hora.",
         )
     db.refresh(reading)
     return reading
@@ -65,7 +70,9 @@ def list_readings(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="El parámetro 'start' no puede ser posterior a 'end'.",
         )
-    stmt = select(MeterReading).order_by(MeterReading.reading_date.asc())
+    stmt = select(MeterReading).order_by(
+        MeterReading.reading_date.asc(), MeterReading.reading_time.asc()
+    )
     if start:
         stmt = stmt.where(MeterReading.reading_date >= start)
     if end:
@@ -75,8 +82,7 @@ def list_readings(
 
 @router.delete("/{reading_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_reading(reading_id: int, db: Session = Depends(get_db)):
-    """Borra una lectura, copiándola antes a la tabla de auditoría
-    deleted_readings (estrategia A2). Ambas operaciones en una transacción."""
+    """Borra una lectura, copiándola antes a deleted_readings (auditoría)."""
     reading = db.get(MeterReading, reading_id)
     if reading is None:
         raise HTTPException(status_code=404, detail="Lectura no encontrada.")
@@ -85,6 +91,7 @@ def delete_reading(reading_id: int, db: Session = Depends(get_db)):
         DeletedReading(
             original_id=reading.id,
             reading_date=reading.reading_date,
+            reading_time=reading.reading_time,
             value_kwh=reading.value_kwh,
             note=reading.note,
             created_at=reading.created_at,

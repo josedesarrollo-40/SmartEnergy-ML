@@ -52,6 +52,7 @@ async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
 
 export interface ReadingCreate {
   reading_date: string; // YYYY-MM-DD
+  reading_time?: string | null; // HH:MM o HH:MM:SS
   value_kwh: number;
   note?: string | null;
 }

@@ -1,11 +1,13 @@
 import math
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ReadingCreate(BaseModel):
     reading_date: date
+    # Hora opcional. Si no se envía, se asume medianoche (00:00).
+    reading_time: time | None = None
     value_kwh: float = Field(ge=0, description="Valor acumulado que marca el contador")
     note: str | None = None
 
@@ -23,6 +25,7 @@ class ReadingOut(BaseModel):
 
     id: int
     reading_date: date
+    reading_time: time
     value_kwh: float
     note: str | None
     created_at: datetime

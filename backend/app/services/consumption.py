@@ -31,7 +31,9 @@ def intervals_from_readings(readings: list[tuple[date, Num]]) -> list[Interval]:
     for (d0, v0), (d1, v1) in zip(readings, readings[1:]):
         days = (d1 - d0).days
         kwh = float(v1) - float(v0)
-        if days <= 0 or kwh < 0:
+        # days < 0 o kwh < 0 => datos incoherentes, se omite.
+        # days == 0 (dos lecturas el mismo día) SÍ cuenta su consumo.
+        if days < 0 or kwh < 0:
             continue
         out.append(Interval(start_date=d0, end_date=d1, days=days, kwh=kwh))
     return out
@@ -45,8 +47,17 @@ def total_days(intervals: list[Interval]) -> int:
     return sum(i.days for i in intervals)
 
 
+def span_days(intervals: list[Interval]) -> int:
+    """Días reales cubiertos: desde el inicio del primer tramo al fin del
+    último. Evita contar de más cuando hay varias lecturas el mismo día
+    (tramos intradía con days=0)."""
+    if not intervals:
+        return 0
+    return (intervals[-1].end_date - intervals[0].start_date).days
+
+
 def avg_daily_kwh(intervals: list[Interval]) -> float:
-    d = total_days(intervals)
+    d = span_days(intervals)
     return total_kwh(intervals) / d if d > 0 else 0.0
 
 

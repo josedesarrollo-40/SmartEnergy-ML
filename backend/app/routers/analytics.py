@@ -23,7 +23,9 @@ router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 def _ordered_readings(db: Session) -> list[MeterReading]:
     return list(
         db.execute(
-            select(MeterReading).order_by(MeterReading.reading_date.asc())
+            select(MeterReading).order_by(
+                MeterReading.reading_date.asc(), MeterReading.reading_time.asc()
+            )
         ).scalars().all()
     )
 

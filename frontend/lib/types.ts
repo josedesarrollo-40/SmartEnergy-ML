@@ -4,6 +4,7 @@
 export interface ReadingOut {
   id: number;
   reading_date: string; // YYYY-MM-DD
+  reading_time: string; // HH:MM:SS
   value_kwh: number;
   note: string | null;
   created_at: string; // ISO datetime

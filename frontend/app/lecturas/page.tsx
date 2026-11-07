@@ -19,7 +19,12 @@ export default function LecturasPage() {
 
   // reading_date se fija en el cliente (useEffect) para no evaluar new Date()
   // durante el prerender estático de Next.
-  const [form, setForm] = useState({ reading_date: "", value_kwh: "", note: "" });
+  const [form, setForm] = useState({
+    reading_date: "",
+    reading_time: "",
+    value_kwh: "",
+    note: "",
+  });
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -71,6 +76,7 @@ export default function LecturasPage() {
 
     const payload: ReadingCreate = {
       reading_date: form.reading_date,
+      reading_time: form.reading_time || null,
       value_kwh: value,
       note: form.note.trim() || null,
     };
@@ -79,7 +85,7 @@ export default function LecturasPage() {
     try {
       await api.createReading(payload);
       setSuccess("Lectura registrada.");
-      setForm({ reading_date: todayISO(), value_kwh: "", note: "" });
+      setForm({ reading_date: todayISO(), reading_time: "", value_kwh: "", note: "" });
       await load();
     } catch (e) {
       setFormError(e instanceof ApiError ? e.message : "No se pudo registrar.");
@@ -119,7 +125,7 @@ export default function LecturasPage() {
         className="mb-8 rounded-xl border bg-card p-5 shadow-sm"
       >
         <h2 className="mb-4 text-lg font-semibold">Nueva lectura</h2>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <label className="flex flex-col gap-1 text-sm">
             <span className="font-medium">Fecha</span>
             <input
@@ -128,6 +134,15 @@ export default function LecturasPage() {
               onChange={(e) => setForm({ ...form, reading_date: e.target.value })}
               className="rounded-md border bg-background px-3 py-2"
               required
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">Hora (opcional)</span>
+            <input
+              type="time"
+              value={form.reading_time}
+              onChange={(e) => setForm({ ...form, reading_time: e.target.value })}
+              className="rounded-md border bg-background px-3 py-2"
             />
           </label>
           <label className="flex flex-col gap-1 text-sm">
@@ -201,6 +216,7 @@ export default function LecturasPage() {
               <thead className="border-b text-left text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 font-medium">Fecha</th>
+                  <th className="px-4 py-3 font-medium">Hora</th>
                   <th className="px-4 py-3 font-medium">Lectura (kWh)</th>
                   <th className="px-4 py-3 font-medium">Consumo</th>
                   <th className="px-4 py-3 font-medium">Nota</th>
@@ -211,6 +227,9 @@ export default function LecturasPage() {
                 {rows.map(({ reading: r, consumo }) => (
                   <tr key={r.id} className="border-b last:border-0">
                     <td className="px-4 py-3">{formatDate(r.reading_date)}</td>
+                    <td className="px-4 py-3 tabular-nums">
+                      {r.reading_time ? r.reading_time.slice(0, 5) : "—"}
+                    </td>
                     <td className="px-4 py-3">{formatKwh(r.value_kwh)}</td>
                     <td className="px-4 py-3">
                       {consumo === null ? "—" : formatKwh(consumo)}
