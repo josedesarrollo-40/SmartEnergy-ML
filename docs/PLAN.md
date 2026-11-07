@@ -42,7 +42,12 @@ Pendientes en fases siguientes: `/api/analytics/history`, `/api/predictions`.
      validación de fechas de consulta, DELETE con auditoría (`deleted_readings`), costo por
      tarifa histórica, `lifespan` en vez de `on_event`, tests aislados por caso.
    - 27 pruebas pasan. App probada end-to-end sobre SQLite (health, alta, duplicado, resumen).
-2. **Neon** — conectar a PostgreSQL real, probar end-to-end.
+2. **Neon + Alembic** (en curso) — migraciones Alembic listas y probadas en SQLite;
+   falta conectar a una instancia real de Neon y correr la prueba de integración.
+   - Alembic configurado: `alembic.ini`, `migrations/env.py` (lee `DATABASE_URL` del
+     entorno, nunca del ini), migración inicial `848e06cbf74d` con las 3 tablas.
+   - `main.py` solo crea tablas con `create_all` en SQLite; en PostgreSQL manda Alembic.
+   - Script `backend/scripts/check_db.py` para verificar la conexión sin exponer la clave.
 3. **Frontend** — Next.js: dashboard, formulario de lectura, historial, gráficas.
 4. **Análisis** — historial por día/semana/mes, comparación de periodos, proyección estadística.
 5. **ML** — modelo predictivo + métricas. Solo con datos suficientes. Marcado como ML, distinto de la estimación estadística.
