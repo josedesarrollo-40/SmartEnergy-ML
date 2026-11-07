@@ -14,6 +14,23 @@ export class ApiError extends Error {
   }
 }
 
+async function extractDetail(res: Response): Promise<string> {
+  try {
+    const body = await res.json();
+    const d = body?.detail;
+    if (typeof d === "string") return d;
+    // FastAPI 422: detail es una lista de errores de validación.
+    if (Array.isArray(d) && d.length > 0) {
+      return d
+        .map((e) => e?.msg ?? "Dato inválido")
+        .join("; ");
+    }
+  } catch {
+    /* sin cuerpo JSON */
+  }
+  return `Error ${res.status}`;
+}
+
 async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
@@ -28,16 +45,27 @@ async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
     );
   }
   if (!res.ok) {
-    let detail = `Error ${res.status}`;
-    try {
-      const body = await res.json();
-      if (body?.detail) detail = String(body.detail);
-    } catch {
-      /* respuesta sin cuerpo JSON */
-    }
-    throw new ApiError(detail, res.status);
+    throw new ApiError(await extractDetail(res), res.status);
   }
   return res.json() as Promise<T>;
+}
+
+export interface ReadingCreate {
+  reading_date: string; // YYYY-MM-DD
+  value_kwh: number;
+  note?: string | null;
+}
+
+async function del(path: string): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, { method: "DELETE", cache: "no-store" });
+  } catch {
+    throw new ApiError("No se pudo conectar con el servidor.");
+  }
+  if (!res.ok && res.status !== 204) {
+    throw new ApiError(await extractDetail(res), res.status);
+  }
 }
 
 export const api = {
@@ -45,6 +73,12 @@ export const api = {
   getSummary: () => getJson<SummaryOut>("/api/analytics/summary"),
   listReadings: () => getJson<ReadingOut[]>("/api/readings"),
   getTariff: () => getJson<TariffOut>("/api/tariff"),
+  createReading: (payload: ReadingCreate) =>
+    getJson<ReadingOut>("/api/readings", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  deleteReading: (id: number) => del(`/api/readings/${id}`),
 };
 
 export { API_URL };
