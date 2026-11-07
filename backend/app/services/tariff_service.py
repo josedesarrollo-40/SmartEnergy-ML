@@ -41,10 +41,18 @@ def get_effective_tariff(db: Session) -> Tariff:
 
 
 def get_tariff_for_date(db: Session, on_date: date) -> Tariff:
-    """SOLO LECTURA. Tarifa vigente en una fecha dada: la de valid_from más
-    reciente que sea <= on_date. Si ninguna empieza antes de esa fecha, usa la
-    más antigua que exista; si la base está vacía, la por defecto en memoria.
-    Nunca escribe. Base de la regla 7 (costo por tarifa histórica)."""
+    """SOLO LECTURA. Tarifa vigente en una fecha dada.
+
+    Regla de tarifas históricas:
+    1. Busca tarifas con valid_from <= on_date.
+    2. Ordena por valid_from DESC (desempata por id DESC).
+    3. Devuelve la más reciente de esas.
+    4. Si NINGUNA tarifa tiene vigencia en o antes de on_date, usa la tarifa por
+       defecto en memoria (default_tariff_unsaved). NUNCA usa una tarifa cuya
+       valid_from sea posterior a on_date (no se aplica una tarifa futura a un
+       periodo anterior a su entrada en vigencia).
+    Nunca escribe en la base.
+    """
     stmt = (
         select(Tariff)
         .where(Tariff.valid_from <= on_date)
@@ -54,13 +62,8 @@ def get_tariff_for_date(db: Session, on_date: date) -> Tariff:
     if tariff is not None:
         return tariff
 
-    oldest = db.execute(
-        select(Tariff).order_by(Tariff.valid_from.asc(), Tariff.id.asc())
-    ).scalars().first()
-    if oldest is not None:
-        return oldest
-
-    # Base vacía: tarifa por defecto en memoria, sin guardar.
+    # Ninguna tarifa vigente en o antes de on_date: tarifa por defecto en
+    # memoria. No se usa una tarifa futura ni se persiste nada.
     return default_tariff_unsaved()
 
 
