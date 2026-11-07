@@ -21,6 +21,12 @@ El consumo entre dos lecturas se **calcula** (diferencia de valores acumulados),
 no se guarda. Regla: el contador solo sube; una lectura nueva no puede tener
 valor menor ni fecha anterior o igual a la última.
 
+**Tarifas y lecturas (GET sin efectos):** ningún endpoint GET escribe en la base.
+Si no hay tarifa guardada, `GET /api/tariff` y `GET /api/analytics/summary`
+devuelven la tarifa por defecto del entorno SIN guardarla (`persisted: false`,
+`id: null`). La tarifa por defecto se persiste solo con `PUT /api/tariff` o con
+`ensure_default_tariff` (siembra explícita en `tariff_service.py`).
+
 ## Endpoints
 
 ```

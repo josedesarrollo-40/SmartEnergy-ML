@@ -20,8 +20,12 @@ class TariffUpdate(BaseModel):
 class TariffOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
+    # id y created_at son None cuando la tarifa es la por defecto en memoria
+    # (todavía no hay ninguna guardada). persisted lo deja explícito para el
+    # frontend.
+    id: int | None = None
     price_per_kwh: float
     currency: str
     valid_from: date
-    created_at: datetime
+    created_at: datetime | None = None
+    persisted: bool = True

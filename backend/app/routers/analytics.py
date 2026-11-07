@@ -15,7 +15,7 @@ from app.services.consumption import (
     monthly_projection,
     total_kwh,
 )
-from app.services.tariff_service import get_current_tariff, get_tariff_for_date
+from app.services.tariff_service import get_effective_tariff, get_tariff_for_date
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
@@ -36,7 +36,7 @@ def summary(db: Session = Depends(get_db)):
     El costo total cobra cada tramo con la tarifa vigente en su fecha (regla 7).
     """
     readings = _ordered_readings(db)
-    current = get_current_tariff(db)
+    current = get_effective_tariff(db)  # solo lectura, no crea tarifa
 
     pairs = [(r.reading_date, r.value_kwh) for r in readings]
     intervals = intervals_from_readings(pairs)

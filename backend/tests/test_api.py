@@ -116,3 +116,39 @@ def test_tariff_non_finite_rejected(client):
         headers={"content-type": "application/json"},
     )
     assert r.status_code in (400, 422)
+
+
+# --- Los GET no deben escribir --------------------------------------------
+
+def test_get_tariff_sin_datos_no_persiste(client):
+    """GET /api/tariff con base vacía devuelve la tarifa por defecto pero NO la
+    guarda: persisted=False e id=None. Un segundo GET sigue sin persistir."""
+    r = client.get("/api/tariff")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["persisted"] is False
+    assert body["id"] is None
+    assert float(body["price_per_kwh"]) == 997.92
+
+    # Segundo GET: sigue sin crear fila (si hubiera creado, persisted sería True).
+    body2 = client.get("/api/tariff").json()
+    assert body2["persisted"] is False
+    assert body2["id"] is None
+
+
+def test_get_summary_sin_datos_no_crea_tarifa(client):
+    """GET /api/analytics/summary con base vacía no crea tarifa: el GET de
+    tarifa posterior sigue devolviendo persisted=False."""
+    client.get("/api/analytics/summary")
+    body = client.get("/api/tariff").json()
+    assert body["persisted"] is False
+    assert body["id"] is None
+
+
+def test_put_tariff_persiste_y_luego_get_la_devuelve(client):
+    """Tras un PUT, la tarifa queda guardada (persisted=True) y el GET la lee."""
+    client.put("/api/tariff", json={"price_per_kwh": 1200.0, "currency": "COP"})
+    body = client.get("/api/tariff").json()
+    assert body["persisted"] is True
+    assert body["id"] is not None
+    assert float(body["price_per_kwh"]) == 1200.0
