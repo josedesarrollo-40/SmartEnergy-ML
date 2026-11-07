@@ -1,0 +1,27 @@
+# Infraestructura como código para Render (backend FastAPI de SmartEnergy ML).
+# El frontend se despliega en Vercel, no aquí.
+#
+# DATABASE_URL NO se define aquí: se configura como variable secreta en el panel
+# de Render (sync: false), para no exponer la cadena de Neon en el repositorio.
+services:
+  - type: web
+    name: smartenergy-ml-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: PYTHON_VERSION
+        value: 3.12.9
+      - key: DATABASE_URL
+        sync: false          # se define a mano en el panel (Neon production)
+      - key: CORS_ORIGINS
+        sync: false          # el dominio de Vercel, cuando lo tengas
+      - key: DEFAULT_CURRENCY
+        value: COP
+      - key: DEFAULT_PRICE_PER_KWH
+        value: "997.92"
