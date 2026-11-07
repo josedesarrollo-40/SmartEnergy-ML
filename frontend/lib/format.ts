@@ -24,3 +24,9 @@ export function formatDate(iso: string | null): string {
     day: "numeric",
   }).format(d);
 }
+
+// Fecha corta "01 ene" para ejes y etiquetas de gráficas.
+export function formatDateShort(iso: string): string {
+  const d = new Date(iso.length <= 10 ? `${iso}T00:00:00` : iso);
+  return new Intl.DateTimeFormat(CO, { day: "2-digit", month: "short" }).format(d);
+}
