@@ -10,8 +10,8 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from app.core.config import get_settings
 from app.db.base import Base
+from migrations.url import get_migration_url
 
 # Importa los modelos para que Base.metadata los conozca (autogenerate).
 from app import models  # noqa: F401
@@ -26,8 +26,9 @@ target_metadata = Base.metadata
 
 
 def _get_url() -> str:
-    url = get_settings().database_url
-    return url or "sqlite:///./smartenergy_dev.db"
+    """URL de base para las migraciones. Delegada en migrations.url para poder
+    probar la regla sin disparar la ejecución de migraciones."""
+    return get_migration_url()
 
 
 def run_migrations_offline() -> None:
