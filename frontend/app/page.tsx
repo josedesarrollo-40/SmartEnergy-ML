@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   Activity,
+  ArrowRight,
+  BarChart3,
   CalendarClock,
   Coins,
   Gauge,
@@ -81,46 +84,70 @@ export default function DashboardPage() {
                 : undefined
             }
             icon={CalendarClock}
+            accent="blue"
           />
           <StatCard
             label="Consumo del periodo"
             value={formatKwh(data.total_kwh)}
             icon={Activity}
+            accent="green"
           />
           <StatCard
             label="Promedio diario"
             value={`${formatKwh(data.avg_daily_kwh)}/día`}
             icon={Gauge}
+            accent="blue"
           />
           <StatCard
             label="Costo estimado"
             value={formatCOP(data.estimated_cost)}
             icon={Coins}
+            accent="amber"
           />
           <StatCard
             label="Proyección mensual"
             value={formatKwh(data.monthly_projection_kwh)}
-            hint="Estimación estadística (promedio × 30), no ML"
+            hint="Estimación estadística (promedio × 30)"
             icon={TrendingUp}
+            accent="violet"
           />
           <StatCard
             label="Costo proyectado"
             value={formatCOP(data.monthly_projection_cost)}
             icon={Wallet}
+            accent="amber"
           />
         </div>
       ) : null}
 
-      {/* Sección de gráficas: pendiente de un endpoint histórico en el backend. */}
-      <section className="mt-8">
-        <h2 className="mb-3 text-lg font-semibold">Comportamiento del consumo</h2>
-        <div className="rounded-lg border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
-          La gráfica histórica estará disponible cuando el backend exponga un
-          endpoint de serie temporal (por ejemplo{" "}
-          <code className="rounded bg-muted px-1 py-0.5">/api/analytics/history</code>
-          ). Hoy el backend solo ofrece el resumen agregado.
-        </div>
-      </section>
+      {/* Comportamiento del consumo: enlaza a la sección de gráficas. */}
+      {!loading && !error && data && hasReadings ? (
+        <section className="mt-8">
+          <h2 className="mb-3 text-lg font-semibold">Comportamiento del consumo</h2>
+          <div className="rounded-xl border bg-card p-6 shadow-sm">
+            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  <BarChart3 className="h-5 w-5" aria-hidden />
+                </span>
+                <div>
+                  <p className="font-medium">Consultar gráficas detalladas</p>
+                  <p className="text-sm text-muted-foreground">
+                    Consumo por intervalo y evolución del contador en el tiempo.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/analitica"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90"
+              >
+                Ver analítica
+                <ArrowRight className="h-4 w-4" aria-hidden />
+              </Link>
+            </div>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

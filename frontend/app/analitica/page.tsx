@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, Coins, Gauge, TrendingUp, Wallet } from "lucide-react";
+import { Activity, Coins, Gauge, ListOrdered, TrendingUp, Wallet } from "lucide-react";
 
 import {
   CumulativeChart,
@@ -12,7 +12,7 @@ import {
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { api, ApiError } from "@/lib/api";
-import { formatCOP, formatDateShort, formatKwh } from "@/lib/format";
+import { formatCOP, formatDate, formatDateShort, formatKwh } from "@/lib/format";
 import type { ReadingOut, SummaryOut } from "@/lib/types";
 
 export default function AnaliticaPage() {
@@ -54,6 +54,8 @@ export default function AnaliticaPage() {
       if (cur.value_kwh < prev.value_kwh) continue; // incoherente, se omite
       out.push({
         label: `${formatDateShort(prev.reading_date)} → ${formatDateShort(cur.reading_date)}`,
+        start: formatDate(prev.reading_date),
+        end: formatDate(cur.reading_date),
         kwh: Number((cur.value_kwh - prev.value_kwh).toFixed(3)),
       });
     }
@@ -100,16 +102,18 @@ export default function AnaliticaPage() {
       {/* Indicadores (del resumen global) */}
       {summary ? (
         <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <StatCard label="Consumo del periodo" value={formatKwh(summary.total_kwh)} icon={Activity} />
-          <StatCard label="Promedio diario" value={`${formatKwh(summary.avg_daily_kwh)}/día`} icon={Gauge} />
-          <StatCard label="Costo estimado" value={formatCOP(summary.estimated_cost)} icon={Coins} />
+          <StatCard label="Consumo del periodo" value={formatKwh(summary.total_kwh)} icon={Activity} accent="green" />
+          <StatCard label="Promedio diario" value={`${formatKwh(summary.avg_daily_kwh)}/día`} icon={Gauge} accent="blue" />
+          <StatCard label="Costo estimado" value={formatCOP(summary.estimated_cost)} icon={Coins} accent="amber" />
+          <StatCard label="Lecturas registradas" value={String(readings.length)} icon={ListOrdered} accent="blue" />
           <StatCard
             label="Proyección mensual"
             value={formatKwh(summary.monthly_projection_kwh)}
-            hint="Estimación estadística (promedio × 30), no ML"
+            hint="Estimación estadística (promedio × 30)"
             icon={TrendingUp}
+            accent="violet"
           />
-          <StatCard label="Costo proyectado" value={formatCOP(summary.monthly_projection_cost)} icon={Wallet} />
+          <StatCard label="Costo proyectado" value={formatCOP(summary.monthly_projection_cost)} icon={Wallet} accent="amber" />
         </div>
       ) : null}
 
