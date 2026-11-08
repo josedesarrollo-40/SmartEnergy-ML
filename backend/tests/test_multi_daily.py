@@ -82,6 +82,32 @@ def test_correct_reading_same_value_rejected(client):
     assert r.status_code == 400
 
 
+def test_observed_now_with_time_is_verified(client):
+    r = client.post("/api/readings", json={
+        "reading_date": "2026-08-26", "value_kwh": 2639,
+        "reading_time": "08:30:00", "observed_now": True})
+    b = r.json()
+    assert b["date_confidence"] == "verified"
+    assert b["time_known"] is True
+
+
+def test_observed_now_without_time_is_confirmed(client):
+    # observed_now sin hora real NO debe ser verified.
+    r = client.post("/api/readings", json={
+        "reading_date": "2026-08-26", "value_kwh": 2639,
+        "observed_now": True})
+    b = r.json()
+    assert b["date_confidence"] == "confirmed"
+    assert b["time_known"] is False
+
+
+def test_manual_without_observed_now_is_confirmed(client):
+    r = client.post("/api/readings", json={
+        "reading_date": "2026-08-26", "value_kwh": 2639,
+        "reading_time": "08:30:00"})  # sin observed_now
+    assert r.json()["date_confidence"] == "confirmed"
+
+
 def test_data_quality_endpoint(client):
     _post(client, "2026-08-01", 100, "08:00:00")
     _post(client, "2026-08-05", 140, "08:00:00")  # hueco de 4 días

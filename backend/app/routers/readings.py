@@ -47,17 +47,23 @@ def create_reading(payload: ReadingCreate, db: Session = Depends(get_db)):
     except ReadingValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
-    # Procedencia: lectura manual desde el formulario. La fecha la confirma el
-    # usuario (confirmed), nunca verified automático. time_known solo si vino
-    # una hora real en el payload.
+    # Procedencia de una lectura manual:
+    # - observada físicamente AHORA, con hora real -> verified (evidencia directa).
+    # - en otro caso -> confirmed (la fecha la confirma el usuario, sin ser
+    #   observación física verificada). time_known solo si vino hora real.
+    time_known = payload.reading_time is not None
+    if payload.observed_now and time_known:
+        confidence = "verified"
+    else:
+        confidence = "confirmed"
     reading = MeterReading(
         reading_date=payload.reading_date,
         reading_time=reading_time,
         value_kwh=payload.value_kwh,
         note=payload.note,
         source="manual",
-        date_confidence="confirmed",
-        time_known=payload.reading_time is not None,
+        date_confidence=confidence,
+        time_known=time_known,
     )
     db.add(reading)
     try:

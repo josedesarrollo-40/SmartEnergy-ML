@@ -24,6 +24,7 @@ export default function LecturasPage() {
     reading_time: "",
     value_kwh: "",
     note: "",
+    observed_now: false,
   });
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -74,18 +75,32 @@ export default function LecturasPage() {
     }
     if (value < 0) return setFormError("El valor no puede ser negativo.");
 
+    // observed_now solo tiene efecto (verified) si además hay hora real.
+    if (form.observed_now && !form.reading_time) {
+      return setFormError(
+        "Para marcar la lectura como observada ahora, indica también la hora real.",
+      );
+    }
+
     const payload: ReadingCreate = {
       reading_date: form.reading_date,
       reading_time: form.reading_time || null,
       value_kwh: value,
       note: form.note.trim() || null,
+      observed_now: form.observed_now && !!form.reading_time,
     };
 
     setSubmitting(true);
     try {
       await api.createReading(payload);
       setSuccess("Lectura registrada.");
-      setForm({ reading_date: todayISO(), reading_time: "", value_kwh: "", note: "" });
+      setForm({
+        reading_date: todayISO(),
+        reading_time: "",
+        value_kwh: "",
+        note: "",
+        observed_now: false,
+      });
       await load();
     } catch (e) {
       setFormError(e instanceof ApiError ? e.message : "No se pudo registrar.");
@@ -137,13 +152,29 @@ export default function LecturasPage() {
             />
           </label>
           <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">Hora (opcional)</span>
-            <input
-              type="time"
-              value={form.reading_time}
-              onChange={(e) => setForm({ ...form, reading_time: e.target.value })}
-              className="rounded-md border bg-background px-3 py-2"
-            />
+            <span className="font-medium">Hora real (opcional)</span>
+            <div className="flex gap-2">
+              <input
+                type="time"
+                step="1"
+                value={form.reading_time}
+                onChange={(e) => setForm({ ...form, reading_time: e.target.value })}
+                className="w-full rounded-md border bg-background px-3 py-2"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setForm({
+                    ...form,
+                    reading_time: new Date().toTimeString().slice(0, 8),
+                  })
+                }
+              >
+                Ahora
+              </Button>
+            </div>
           </label>
           <label className="flex flex-col gap-1 text-sm">
             <span className="font-medium">Lectura del medidor (kWh)</span>
@@ -170,6 +201,37 @@ export default function LecturasPage() {
             />
           </label>
         </div>
+
+        <label className="mt-4 flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={form.observed_now}
+            onChange={(e) => setForm({ ...form, observed_now: e.target.checked })}
+            className="mt-0.5"
+          />
+          <span>
+            La observé ahora en el medidor (fecha y hora reales).
+            <span className="block text-xs text-muted-foreground">
+              Marca la lectura como verificada. Requiere indicar la hora real.
+            </span>
+          </span>
+        </label>
+
+        {/* Confirmación de datos antes de guardar */}
+        {form.value_kwh && form.reading_date ? (
+          <div className="mt-4 rounded-md border bg-muted/40 p-3 text-sm">
+            <p className="font-medium">Vas a registrar:</p>
+            <p className="text-muted-foreground">
+              {form.reading_date}
+              {form.reading_time ? ` ${form.reading_time}` : " (sin hora)"} ·{" "}
+              {form.value_kwh} kWh
+              {" · "}
+              {form.observed_now && form.reading_time
+                ? "verificada"
+                : "confirmada"}
+            </p>
+          </div>
+        ) : null}
 
         {formError ? (
           <p className="mt-3 text-sm text-destructive">{formError}</p>

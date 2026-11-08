@@ -10,6 +10,10 @@ class ReadingCreate(BaseModel):
     reading_time: time | None = None
     value_kwh: float = Field(ge=0, description="Valor acumulado que marca el contador")
     note: str | None = None
+    # True cuando el usuario registra una lectura que acaba de observar
+    # físicamente en el medidor, con fecha y hora reales. Eleva la confianza a
+    # 'verified'. Si falta la hora real, no se considera verified.
+    observed_now: bool = False
 
     @field_validator("value_kwh")
     @classmethod

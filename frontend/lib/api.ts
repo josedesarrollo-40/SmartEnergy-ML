@@ -55,6 +55,7 @@ export interface ReadingCreate {
   reading_time?: string | null; // HH:MM o HH:MM:SS
   value_kwh: number;
   note?: string | null;
+  observed_now?: boolean;
 }
 
 export interface TariffUpdate {
