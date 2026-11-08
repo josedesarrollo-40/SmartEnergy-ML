@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BarChart3, Gauge, LayoutDashboard, Zap } from "lucide-react";
 
+import { LogoMark } from "@/components/logo";
 import { cn } from "@/lib/utils";
 
 const items = [
@@ -19,11 +20,9 @@ export function Sidebar() {
   return (
     <aside className="flex w-full shrink-0 flex-col bg-sidebar text-sidebar-foreground md:h-screen md:w-64">
       <div className="flex items-center gap-2.5 px-6 py-6">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-          <Zap className="h-5 w-5 text-primary-foreground" aria-hidden />
-        </span>
+        <LogoMark className="h-9 w-9" />
         <div className="leading-tight">
-          <span className="block text-base font-semibold">SmartEnergy</span>
+          <span className="block text-base font-semibold">SmartEnergy ML</span>
           <span className="block text-xs text-sidebar-foreground/60">
             Análisis energético
           </span>

@@ -16,12 +16,13 @@ import {
 import { StatCard } from "@/components/stat-card";
 import { api, ApiError } from "@/lib/api";
 import { formatCOP, formatDate, formatKwh } from "@/lib/format";
-import type { SummaryOut } from "@/lib/types";
+import type { DataQualityOut, SummaryOut } from "@/lib/types";
 
 export default function DashboardPage() {
   const [data, setData] = useState<SummaryOut | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [quality, setQuality] = useState<DataQualityOut | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -37,6 +38,15 @@ export default function DashboardPage() {
       })
       .finally(() => {
         if (active) setLoading(false);
+      });
+    // Calidad de datos (independiente: su error no rompe el dashboard).
+    api
+      .getDataQuality()
+      .then((q) => {
+        if (active) setQuality(q);
+      })
+      .catch(() => {
+        if (active) setQuality(null);
       });
     return () => {
       active = false;
@@ -120,6 +130,9 @@ export default function DashboardPage() {
         </div>
       ) : null}
 
+      {/* Calidad de datos */}
+      {quality ? <DataQualitySection q={quality} /> : null}
+
       {/* Comportamiento del consumo: enlaza a la sección de gráficas. */}
       {!loading && !error && data && hasReadings ? (
         <section className="mt-8">
@@ -163,5 +176,50 @@ function LoadingGrid() {
         />
       ))}
     </div>
+  );
+}
+
+function QualityStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border bg-background p-3 text-center">
+      <p className="text-xl font-bold tabular-nums">{value}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+function DataQualitySection({ q }: { q: DataQualityOut }) {
+  const c = q.confidence_counts ?? {};
+  return (
+    <section className="mt-8">
+      <h2 className="mb-1 text-lg font-semibold">Calidad de datos</h2>
+      <p className="mb-4 text-sm text-muted-foreground">
+        Cuánta de la información es medición real y cuánta es estimada. Los días
+        interpolados y las lecturas pendientes no son mediciones confirmadas.
+      </p>
+      <div className="rounded-xl border bg-card p-5 shadow-sm">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <QualityStat label="Lecturas" value={q.total_readings} />
+          <QualityStat label="Días observados" value={q.observed_days} />
+          <QualityStat label="Días interpolados" value={q.interpolated_days} />
+          <QualityStat label="Con hora real" value={q.time_known_count} />
+          <QualityStat label="Intervalos irregulares" value={q.irregular_intervals.length} />
+          <QualityStat label="Verificadas" value={c.verified ?? 0} />
+          <QualityStat label="Confirmadas" value={c.confirmed ?? 0} />
+          <QualityStat label="Inferidas" value={c.inferred ?? 0} />
+          <QualityStat label="Pendientes" value={c.pending ?? 0} />
+        </div>
+        <div className="mt-4 space-y-1 text-xs text-muted-foreground">
+          <p>
+            <strong>Interpolado:</strong> día sin lectura propia; su consumo se
+            reparte desde una lectura posterior. No es una medición directa.
+          </p>
+          <p>
+            <strong>Pendiente / inferida:</strong> la fecha aún no está
+            confirmada. Úsalas con cautela para análisis.
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }

@@ -1,5 +1,5 @@
 // Cliente HTTP al backend FastAPI. La URL viene de NEXT_PUBLIC_API_URL.
-import type { ReadingOut, SummaryOut, TariffOut } from "@/lib/types";
+import type { DataQualityOut, ReadingOut, SummaryOut, TariffOut } from "@/lib/types";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://127.0.0.1:8000";
@@ -78,6 +78,7 @@ async function del(path: string): Promise<void> {
 export const api = {
   health: () => getJson<{ status: string }>("/health"),
   getSummary: () => getJson<SummaryOut>("/api/analytics/summary"),
+  getDataQuality: () => getJson<DataQualityOut>("/api/analytics/data-quality"),
   listReadings: () => getJson<ReadingOut[]>("/api/readings"),
   listReadingsRange: (start?: string, end?: string) => {
     const qs = new URLSearchParams();

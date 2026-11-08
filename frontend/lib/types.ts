@@ -19,6 +19,21 @@ export interface TariffOut {
   persisted: boolean;
 }
 
+export interface DataQualityOut {
+  total_readings: number;
+  first_date: string | null;
+  last_date: string | null;
+  span_days: number;
+  observed_days: number;
+  interpolated_days: number;
+  missing_days: number;
+  time_known_count: number;
+  confidence_counts: Record<string, number>;
+  source_counts: Record<string, number>;
+  irregular_intervals: { from: string; to: string; days: number }[];
+  pending_or_inferred: number;
+}
+
 export interface SummaryOut {
   last_reading_date: string | null;
   last_reading_value: number | null;
