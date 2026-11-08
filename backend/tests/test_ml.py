@@ -75,3 +75,33 @@ def test_metrics_masked_filters_to_observed():
 def test_metrics_empty_is_safe():
     m = metrics([], [])
     assert m["n"] == 0 and m["MAE"] is None
+
+
+def test_reliable_truth_mask_excludes_pending_and_interpolated():
+    from datetime import date
+    from app.ml.dataset import build_daily_series, reliable_truth_mask
+    rs = [
+        _r(date(2026, 1, 1), 100, "verified", True),
+        _r(date(2026, 1, 2), 110, "verified", True),   # observado + verified
+        _r(date(2026, 1, 5), 140, "pending", False),   # observado pero pending
+    ]
+    daily = build_daily_series(rs)
+    mask = reliable_truth_mask(daily, rs)
+    # dia 02 (verified, observado) -> True
+    # dias 03,04 interpolados -> False
+    # dia 05 (pending, observado) -> False (pending no es verdad de referencia)
+    assert mask[0] is True
+    assert mask[1] is False and mask[2] is False
+    assert mask[3] is False
+
+
+def test_reliable_truth_mask_confirmed_counts():
+    from datetime import date
+    from app.ml.dataset import build_daily_series, reliable_truth_mask
+    rs = [
+        _r(date(2026, 1, 1), 100, "verified", True),
+        _r(date(2026, 1, 2), 110, "confirmed", False),  # confirmed también es fiable
+    ]
+    daily = build_daily_series(rs)
+    mask = reliable_truth_mask(daily, rs)
+    assert mask[0] is True   # dia 02, confirmed, observado

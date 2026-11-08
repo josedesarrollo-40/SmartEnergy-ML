@@ -82,3 +82,27 @@ def classify_counts(readings: list[Reading]) -> dict[str, int]:
     counts["_con_hora_real"] = sum(1 for r in readings if r.has_real_time)
     counts["_total"] = len(readings)
     return counts
+
+
+# Procedencias que SÍ sirven como verdad de referencia para evaluar un modelo.
+# 'pending' queda excluida: su fecha no está confirmada, así que no debe usarse
+# como ground truth. 'inferred' se considera no fiable para evaluación.
+RELIABLE_PROVENANCE = {"verified", "confirmed"}
+
+
+def reliable_truth_mask(daily: list[DailyPoint],
+                        readings: list[Reading]) -> list[bool]:
+    """Para cada día de la serie diaria, True si ese día puede usarse como
+    verdad de referencia: debe ser OBSERVADO (no interpolado) y provenir de una
+    lectura de procedencia fiable (verified/confirmed).
+
+    Un día interpolado nunca es verdad de referencia. Un día cuya lectura es
+    pending/inferred tampoco."""
+    # mapa fecha -> procedencia de la lectura de ese día (si existe)
+    prov_by_day = {r.dt.date(): r.provenance for r in readings}
+    mask: list[bool] = []
+    for p in daily:
+        reliable = (p.kind == "observado"
+                    and prov_by_day.get(p.day) in RELIABLE_PROVENANCE)
+        mask.append(reliable)
+    return mask
