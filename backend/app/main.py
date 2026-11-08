@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from app.core.config import get_settings
 from app.db.base import Base
 from app.db.session import engine
-from app.routers import analytics, readings, tariff
+from app.routers import analytics, invoices, readings, tariff
 
 # Importa los modelos para que se registren en Base.metadata.
 from app import models  # noqa: F401
@@ -75,3 +75,4 @@ def health() -> dict:
 app.include_router(readings.router)
 app.include_router(tariff.router)
 app.include_router(analytics.router)
+app.include_router(invoices.router)

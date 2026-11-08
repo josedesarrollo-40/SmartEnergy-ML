@@ -86,6 +86,96 @@ def monthly_projection(avg_daily: float) -> float:
     return round(avg_daily * 30, 3)
 
 
+@dataclass
+class PeriodConsumption:
+    start: date
+    end: date
+    kwh: float
+    estimated: bool          # True si hubo interpolación en algún borde
+    estimated_fraction: float  # proporción del kWh que proviene de interpolación
+    sufficient: bool         # False si no hay lecturas para un cálculo razonable
+    note: str
+
+
+def consumption_between(
+    readings: list[tuple[date, Num]], start: date, end: date
+) -> PeriodConsumption:
+    """Consumo en [start, end] a partir de lecturas acumuladas (fecha, valor)
+    ORDENADAS. Los tramos que cruzan un borde se reparten proporcionalmente por
+    días (interpolación), y esa porción se marca como estimada.
+
+    Si no hay lecturas que cubran el período de forma razonable, devuelve
+    sufficient=False sin inventar consumo.
+    """
+    if end < start:
+        return PeriodConsumption(start, end, 0.0, False, 0.0, False,
+                                 "Rango inválido: end < start.")
+    pairs = [(d, float(v)) for d, v in readings]
+    pairs.sort(key=lambda x: x[0])
+
+    # ¿hay lecturas que solapen el período?
+    covering = [p for p in pairs if p[0] <= end]
+    if len(pairs) < 2 or not covering or pairs[0][0] > end or pairs[-1][0] < start:
+        return PeriodConsumption(start, end, 0.0, False, 0.0, False,
+                                 "Información insuficiente: no hay lecturas que "
+                                 "cubran el período.")
+
+    total = 0.0
+    estimated = 0.0
+    any_interp = False
+    span = (end - start).days + 1
+    for (d0, v0), (d1, v1) in zip(pairs, pairs[1:]):
+        days = (d1 - d0).days
+        kwh = v1 - v0
+        if days <= 0 or kwh < 0:
+            continue
+        # solapamiento del tramo [d0,d1] con [start,end]
+        ov_start = max(d0, start)
+        ov_end = min(d1, end)
+        ov_days = (ov_end - ov_start).days
+        if ov_days <= 0:
+            continue
+        frac = ov_days / days
+        part = kwh * frac
+        total += part
+        # si el tramo no está enteramente dentro del período, la parte es estimada
+        if d0 < start or d1 > end:
+            estimated += part
+            any_interp = True
+
+    if total == 0.0:
+        return PeriodConsumption(start, end, 0.0, False, 0.0, False,
+                                 "Información insuficiente para el período.")
+
+    est_frac = round(estimated / total, 4) if total else 0.0
+    return PeriodConsumption(
+        start=start, end=end, kwh=round(total, 3),
+        estimated=any_interp, estimated_fraction=est_frac, sufficient=True,
+        note=("Incluye interpolación proporcional en los bordes del período."
+              if any_interp else "Cálculo sobre tramos completos."),
+    )
+
+
+def cost_between(
+    period: PeriodConsumption, intervals: list[Interval], price_for: "PriceLookup"
+) -> float:
+    """Costo del período usando la tarifa vigente en el inicio de cada tramo que
+    cae dentro, proporcional al solapamiento. Reusa la política histórica."""
+    if not period.sufficient:
+        return 0.0
+    total = Decimal("0")
+    for itv in intervals:
+        ov_start = max(itv.start_date, period.start)
+        ov_end = min(itv.end_date, period.end)
+        ov_days = (ov_end - ov_start).days
+        if ov_days <= 0 or itv.days <= 0:
+            continue
+        frac = Decimal(ov_days) / Decimal(itv.days)
+        price = _to_decimal(price_for(itv.start_date))
+        total += _to_decimal(itv.kwh) * frac * price
+    return float(total.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
 # Tipo del callback de precio por fecha. Se importa perezoso para no crear
 # dependencia circular con los servicios de base de datos.
 from typing import Callable  # noqa: E402

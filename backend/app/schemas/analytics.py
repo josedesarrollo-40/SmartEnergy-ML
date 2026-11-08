@@ -40,6 +40,38 @@ class PredictionOut(BaseModel):
     points: list[PredictionPoint]
 
 
+class PeriodConsumptionOut(BaseModel):
+    start: date
+    end: date
+    kwh: float
+    estimated: bool            # hubo interpolación en bordes
+    estimated_fraction: float  # proporción del kWh estimada
+    sufficient: bool           # False si no hay datos suficientes
+    estimated_cost: float
+    currency: str
+    note: str
+
+
+class InvoiceComparisonOut(BaseModel):
+    period_start: date
+    period_end: date
+    # calculado por SmartEnergy ML
+    calculated_kwh: float
+    calculated_cost: float
+    calculated_sufficient: bool
+    calculated_estimated: bool
+    # facturado
+    billed_kwh: float
+    billed_amount: float
+    # diferencias (calculado - facturado)
+    kwh_diff: float
+    kwh_diff_pct: float | None       # None si billed_kwh = 0
+    cost_diff: float
+    cost_diff_pct: float | None      # None si billed_amount = 0
+    currency: str
+    note: str
+
+
 class DataQualityOut(BaseModel):
     total_readings: int
     first_date: date | None
