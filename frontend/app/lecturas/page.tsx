@@ -31,6 +31,8 @@ export default function LecturasPage() {
   const [success, setSuccess] = useState<string | null>(null);
 
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [confirmingId, setConfirmingId] = useState<number | null>(null);
+  const [onlyPending, setOnlyPending] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,13 +57,33 @@ export default function LecturasPage() {
 
   // Consumo por intervalo: diferencia con la lectura anterior (orden ascendente).
   const rows = useMemo(() => {
-    return readings.map((r, i) => {
+    const all = readings.map((r, i) => {
       const prev = i > 0 ? readings[i - 1] : null;
       const consumo =
         prev && r.value_kwh >= prev.value_kwh ? r.value_kwh - prev.value_kwh : null;
       return { reading: r, consumo };
     });
-  }, [readings]);
+    return onlyPending
+      ? all.filter((x) => x.reading.date_confidence === "pending")
+      : all;
+  }, [readings, onlyPending]);
+
+  async function onConfirm(r: ReadingOut) {
+    const ok = window.confirm(
+      `¿Confirmas que la fecha ${formatDate(r.reading_date)} de esta lectura ` +
+        `(${formatKwh(r.value_kwh)}) es correcta?`,
+    );
+    if (!ok) return;
+    setConfirmingId(r.id);
+    try {
+      await api.confirmReadingDate(r.id);
+      await load();
+    } catch (e) {
+      setListError(e instanceof ApiError ? e.message : "No se pudo confirmar.");
+    } finally {
+      setConfirmingId(null);
+    }
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -252,7 +274,17 @@ export default function LecturasPage() {
 
       {/* Historial */}
       <section>
-        <h2 className="mb-3 text-lg font-semibold">Historial</h2>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Historial</h2>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={onlyPending}
+              onChange={(e) => setOnlyPending(e.target.checked)}
+            />
+            Solo pendientes
+          </label>
+        </div>
 
         {loading ? (
           <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
@@ -281,6 +313,7 @@ export default function LecturasPage() {
                   <th className="px-4 py-3 font-medium">Hora</th>
                   <th className="px-4 py-3 font-medium">Lectura (kWh)</th>
                   <th className="px-4 py-3 font-medium">Consumo</th>
+                  <th className="px-4 py-3 font-medium">Confianza</th>
                   <th className="px-4 py-3 font-medium">Nota</th>
                   <th className="px-4 py-3 font-medium text-right">Acción</th>
                 </tr>
@@ -296,21 +329,40 @@ export default function LecturasPage() {
                     <td className="px-4 py-3">
                       {consumo === null ? "—" : formatKwh(consumo)}
                     </td>
+                    <td className="px-4 py-3">
+                      <ConfidenceBadge value={r.date_confidence} />
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground">{r.note ?? "—"}</td>
                     <td className="px-4 py-3 text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onDelete(r)}
-                        disabled={deletingId === r.id}
-                        aria-label="Eliminar lectura"
-                      >
-                        {deletingId === r.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                        ) : (
-                          <Trash2 className="h-4 w-4 text-destructive" aria-hidden />
-                        )}
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        {r.date_confidence === "pending" ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onConfirm(r)}
+                            disabled={confirmingId === r.id}
+                          >
+                            {confirmingId === r.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                            ) : (
+                              "Confirmar fecha"
+                            )}
+                          </Button>
+                        ) : null}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onDelete(r)}
+                          disabled={deletingId === r.id}
+                          aria-label="Eliminar lectura"
+                        >
+                          {deletingId === r.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                          ) : (
+                            <Trash2 className="h-4 w-4 text-destructive" aria-hidden />
+                          )}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -320,5 +372,30 @@ export default function LecturasPage() {
         ) : null}
       </section>
     </div>
+  );
+}
+
+const CONFIDENCE_STYLE: Record<string, string> = {
+  verified: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  confirmed: "bg-blue-500/15 text-blue-700 dark:text-blue-400",
+  inferred: "bg-amber-500/15 text-amber-700 dark:text-amber-500",
+  pending: "bg-muted text-muted-foreground",
+};
+
+const CONFIDENCE_LABEL: Record<string, string> = {
+  verified: "Verificada",
+  confirmed: "Confirmada",
+  inferred: "Inferida",
+  pending: "Pendiente",
+};
+
+function ConfidenceBadge({ value }: { value: string }) {
+  const style = CONFIDENCE_STYLE[value] ?? "bg-muted text-muted-foreground";
+  return (
+    <span
+      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${style}`}
+    >
+      {CONFIDENCE_LABEL[value] ?? value}
+    </span>
   );
 }

@@ -7,6 +7,9 @@ export interface ReadingOut {
   reading_time: string; // HH:MM:SS
   value_kwh: number;
   note: string | null;
+  source: string;
+  date_confidence: string; // verified | confirmed | inferred | pending
+  time_known: boolean;
   created_at: string; // ISO datetime
 }
 

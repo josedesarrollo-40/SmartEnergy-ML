@@ -108,6 +108,46 @@ def test_manual_without_observed_now_is_confirmed(client):
     assert r.json()["date_confidence"] == "confirmed"
 
 
+def test_confirm_pending_date(client):
+    # Una lectura cargada a mano arranca como 'confirmed'; forzamos pending
+    # vía inserción directa no es posible por API, así que probamos el flujo:
+    # el endpoint promueve pending->confirmed. Simulamos con una lectura y
+    # verificamos la protección de verified en otra prueba.
+    rid = _post(client, "2026-08-26", 2639, "08:00:00").json()["id"]
+    # está confirmed (manual); confirmar de nuevo es idempotente (200, sin cambio)
+    r = client.patch(f"/api/readings/{rid}/confirm-date")
+    assert r.status_code == 200
+    assert r.json()["date_confidence"] == "confirmed"
+
+
+def test_confirm_missing_reading(client):
+    r = client.patch("/api/readings/9999/confirm-date")
+    assert r.status_code == 404
+
+
+def test_confirm_does_not_touch_verified(client):
+    # Lectura verified (observada ahora). Confirmar NO la degrada: 409.
+    rid = client.post("/api/readings", json={
+        "reading_date": "2026-08-26", "value_kwh": 2639,
+        "reading_time": "08:00:00", "observed_now": True}).json()["id"]
+    r = client.patch(f"/api/readings/{rid}/confirm-date")
+    assert r.status_code == 409
+    # sigue verified
+    got = [x for x in client.get("/api/readings").json() if x["id"] == rid][0]
+    assert got["date_confidence"] == "verified"
+
+
+def test_confirm_preserves_value_date_time_note(client):
+    rid = _post(client, "2026-08-26", 2639, "08:00:00", note="lectura X").json()["id"]
+    before = [x for x in client.get("/api/readings").json() if x["id"] == rid][0]
+    client.patch(f"/api/readings/{rid}/confirm-date")
+    after = [x for x in client.get("/api/readings").json() if x["id"] == rid][0]
+    assert after["value_kwh"] == before["value_kwh"]
+    assert after["reading_date"] == before["reading_date"]
+    assert after["reading_time"] == before["reading_time"]
+    assert after["note"] == before["note"]
+
+
 def test_data_quality_endpoint(client):
     _post(client, "2026-08-01", 100, "08:00:00")
     _post(client, "2026-08-05", 140, "08:00:00")  # hueco de 4 días

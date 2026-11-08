@@ -48,3 +48,6 @@ class ReadingCorrectionIn(BaseModel):
         if not math.isfinite(v):
             raise ValueError("new_value debe ser finito.")
         return v
+
+
+

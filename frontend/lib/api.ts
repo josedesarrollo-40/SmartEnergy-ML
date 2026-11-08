@@ -100,6 +100,8 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   deleteReading: (id: number) => del(`/api/readings/${id}`),
+  confirmReadingDate: (id: number) =>
+    getJson<ReadingOut>(`/api/readings/${id}/confirm-date`, { method: "PATCH" }),
 };
 
 export { API_URL };

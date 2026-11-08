@@ -132,6 +132,33 @@ def correct_reading_value(
     return reading
 
 
+@router.patch("/{reading_id}/confirm-date", response_model=ReadingOut)
+def confirm_reading_date(reading_id: int, db: Session = Depends(get_db)):
+    """Confirma la fecha de una lectura pendiente/inferida: sube su
+    date_confidence a 'confirmed'. NO toca valor, fecha, hora ni nota.
+
+    Protecciones:
+    - Una lectura ya 'verified' NO se degrada ni cambia (409).
+    - Una lectura ya 'confirmed' se deja igual (idempotente, 200).
+    - Solo 'pending' e 'inferred' se promueven a 'confirmed'.
+    """
+    reading = db.get(MeterReading, reading_id)
+    if reading is None:
+        raise HTTPException(status_code=404, detail="Lectura no encontrada.")
+
+    if reading.date_confidence == "verified":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La lectura ya está verificada; no se modifica.",
+        )
+    if reading.date_confidence in ("pending", "inferred"):
+        reading.date_confidence = "confirmed"
+        db.commit()
+        db.refresh(reading)
+    # si ya era 'confirmed', no se toca nada
+    return reading
+
+
 @router.delete("/{reading_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_reading(reading_id: int, db: Session = Depends(get_db)):
     """Borra una lectura, copiándola antes a deleted_readings (auditoría)."""
