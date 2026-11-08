@@ -77,15 +77,29 @@ export interface DataQualityOut {
   pending_or_inferred: number;
 }
 
-// Estructura preparada para variables climáticas (Open-Meteo), aún sin
-// implementar. El backend todavía NO expone un endpoint de clima: no se
-// muestran valores ficticios hasta que exista ese contrato.
-export interface WeatherPoint {
-  date: string; // YYYY-MM-DD
-  temp_c: number | null; // temperatura media (°C)
-  temp_min_c: number | null;
+// Clima de un intervalo entre dos lecturas (fuente: Open-Meteo). El backend
+// consulta y agrega; el frontend solo presenta. status distingue los datos
+// disponibles de los pendientes/fallidos/no disponibles (nunca ficticios).
+export interface IntervalWeatherRow {
+  start_reading_id: number;
+  end_reading_id: number;
+  start_date: string; // YYYY-MM-DD
+  end_date: string; // YYYY-MM-DD
+  consumption_kwh: number | null;
+  temp_avg_c: number | null;
   temp_max_c: number | null;
-  humidity_pct: number | null; // humedad relativa media (%)
+  temp_min_c: number | null;
+  humidity_avg_pct: number | null;
+  observation_count: number;
+  status: string; // available | pending | failed | unavailable
+  source: string | null;
+}
+
+export interface WeatherBackfillResult {
+  checked: number;
+  updated: number;
+  still_pending: number;
+  failed: number;
 }
 
 export interface SummaryOut {

@@ -1,12 +1,14 @@
 // Cliente HTTP al backend FastAPI. La URL viene de NEXT_PUBLIC_API_URL.
 import type {
   DataQualityOut,
+  IntervalWeatherRow,
   InvoiceComparisonOut,
   InvoiceOut,
   PeriodConsumptionOut,
   ReadingOut,
   SummaryOut,
   TariffOut,
+  WeatherBackfillResult,
 } from "@/lib/types";
 
 export interface InvoiceCreate {
@@ -136,6 +138,13 @@ export const api = {
     getJson<PeriodConsumptionOut>(
       `/api/analytics/period?start=${start}&end=${end}`,
     ),
+  // Clima por intervalo. Solo LECTURA de lo ya capturado por el backend:
+  // consultar esta ruta NO dispara llamadas a Open-Meteo.
+  listIntervalWeather: () =>
+    getJson<IntervalWeatherRow[]>("/api/weather/intervals"),
+  // Acción explícita del usuario: reintenta los intervalos pendientes/fallidos.
+  recoverWeather: () =>
+    getJson<WeatherBackfillResult>("/api/weather/recover", { method: "POST" }),
 };
 
 export { API_URL };

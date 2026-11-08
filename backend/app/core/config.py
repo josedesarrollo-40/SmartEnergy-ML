@@ -23,6 +23,16 @@ class Settings(BaseSettings):
     default_currency: str = "COP"
     default_price_per_kwh: float = 997.92
 
+    # Ubicación climática de la vivienda (Open-Meteo). Centralizada aquí, NO en
+    # .env, y ajustable después para mayor precisión. Inicial: Ibagué, Tolima.
+    # No se consulta ni almacena clima de otras ciudades.
+    weather_latitude: float = 4.4389
+    weather_longitude: float = -75.2322
+    weather_timezone: str = "America/Bogota"
+    # Segundos de timeout para la consulta a Open-Meteo. Un fallo nunca debe
+    # impedir registrar la lectura eléctrica.
+    weather_timeout_seconds: float = 10.0
+
     # CORS: lista separada por comas.
     cors_origins: str = "http://localhost:3000"
 

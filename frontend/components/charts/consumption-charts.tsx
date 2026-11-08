@@ -6,6 +6,9 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -61,6 +64,68 @@ export function IntervalChart({ data }: { data: IntervalPoint[] }) {
         <Tooltip content={<IntervalTooltip />} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
         <Bar dataKey="kwh" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
       </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+export interface WeatherConsumptionPoint {
+  label: string; // etiqueta del intervalo, p. ej. "26 oct → 04 nov"
+  kwh: number | null; // consumo eléctrico del intervalo
+  temp: number | null; // temperatura promedio (°C), null si no disponible
+}
+
+// Consumo (barras, eje izq.) vs temperatura promedio (línea, eje der.).
+// Solo dibuja puntos con datos reales; los intervalos sin clima quedan vacíos.
+export function WeatherConsumptionChart({
+  data,
+}: {
+  data: WeatherConsumptionPoint[];
+}) {
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+        <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+        <YAxis
+          yAxisId="kwh"
+          tick={{ fontSize: 11 }}
+          tickFormatter={(v) => nf.format(v as number)}
+          width={56}
+        />
+        <YAxis
+          yAxisId="temp"
+          orientation="right"
+          tick={{ fontSize: 11 }}
+          tickFormatter={(v) => `${nf.format(v as number)}°`}
+          width={48}
+        />
+        <Tooltip
+          formatter={(value, name) =>
+            name === "Temperatura"
+              ? [`${nf.format(value as number)} °C`, name]
+              : [formatKwh(value as number), "Consumo"]
+          }
+          contentStyle={{ borderRadius: 8 }}
+        />
+        <Legend />
+        <Bar
+          yAxisId="kwh"
+          dataKey="kwh"
+          name="Consumo"
+          fill="var(--chart-2)"
+          radius={[4, 4, 0, 0]}
+        />
+        <Line
+          yAxisId="temp"
+          type="monotone"
+          dataKey="temp"
+          name="Temperatura"
+          stroke="var(--chart-4)"
+          strokeWidth={2}
+          dot={{ r: 3 }}
+          connectNulls={false}
+        />
+      </ComposedChart>
     </ResponsiveContainer>
   );
 }

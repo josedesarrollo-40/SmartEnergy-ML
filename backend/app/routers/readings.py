@@ -16,6 +16,7 @@ from app.models.reading import (
 )
 from app.schemas.reading import ReadingCorrectionIn, ReadingCreate, ReadingOut
 from app.services.validation import ReadingValidationError, validate_new_reading
+from app.services.weather_capture import capture_latest_interval
 
 router = APIRouter(prefix="/api/readings", tags=["readings"])
 
@@ -75,6 +76,18 @@ def create_reading(payload: ReadingCreate, db: Session = Depends(get_db)):
             detail="Ya existe una lectura para esa fecha y hora.",
         )
     db.refresh(reading)
+
+    # Captura del clima del intervalo (lectura anterior -> esta). Es best-effort:
+    # la lectura YA está guardada y confirmada arriba. Cualquier problema se
+    # traduce a estado persistido (pending/failed) y, si algo inesperado ocurre,
+    # se descarta sin afectar la respuesta de la lectura.
+    try:
+        row = capture_latest_interval(db, reading)
+        if row is not None:
+            db.commit()
+    except Exception:  # noqa: BLE001 - el registro eléctrico nunca debe fallar por el clima
+        db.rollback()
+
     return reading
 
 

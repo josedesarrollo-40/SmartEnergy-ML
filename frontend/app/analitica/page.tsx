@@ -1,21 +1,36 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, Coins, Gauge, ListOrdered, TrendingUp, Wallet } from "lucide-react";
+import {
+  Activity,
+  CloudSun,
+  Coins,
+  Gauge,
+  ListOrdered,
+  Loader2,
+  RefreshCw,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
 
 import {
   CumulativeChart,
   IntervalChart,
+  WeatherConsumptionChart,
   type CumulativePoint,
   type IntervalPoint,
+  type WeatherConsumptionPoint,
 } from "@/components/charts/consumption-charts";
-import { CloudSun } from "lucide-react";
-
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { api, ApiError } from "@/lib/api";
 import { formatCOP, formatDate, formatDateShort, formatKwh } from "@/lib/format";
-import type { PeriodConsumptionOut, ReadingOut, SummaryOut } from "@/lib/types";
+import type {
+  IntervalWeatherRow,
+  PeriodConsumptionOut,
+  ReadingOut,
+  SummaryOut,
+} from "@/lib/types";
 
 export default function AnaliticaPage() {
   const [summary, setSummary] = useState<SummaryOut | null>(null);
@@ -257,40 +272,228 @@ export default function AnaliticaPage() {
   );
 }
 
-// Estructura preparada para variables climáticas (Open-Meteo). Todavía no hay
-// datos: el backend no expone clima y no se muestran valores ficticios.
-function WeatherSection() {
+const WEATHER_STATUS: Record<string, { label: string; style: string }> = {
+  available: {
+    label: "Disponible",
+    style: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  },
+  pending: {
+    label: "Pendiente",
+    style: "bg-amber-500/15 text-amber-700 dark:text-amber-500",
+  },
+  failed: {
+    label: "Fallido",
+    style: "bg-red-500/15 text-red-700 dark:text-red-400",
+  },
+  unavailable: {
+    label: "No disponible",
+    style: "bg-muted text-muted-foreground",
+  },
+};
+
+function WeatherStatusBadge({ value }: { value: string }) {
+  const s = WEATHER_STATUS[value] ?? WEATHER_STATUS.unavailable;
   return (
-    <section className="mt-8 rounded-xl border border-dashed bg-card p-5 shadow-sm">
-      <div className="mb-3 flex items-center gap-2">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400">
-          <CloudSun className="h-5 w-5" aria-hidden />
-        </span>
-        <div>
-          <h2 className="text-lg font-semibold">Variables climáticas</h2>
-          <p className="text-sm text-muted-foreground">
-            Temperatura y humedad para contrastar con el consumo.
-          </p>
-        </div>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-3">
-        {[
-          { label: "Temperatura", unit: "°C" },
-          { label: "Temp. máx / mín", unit: "°C" },
-          { label: "Humedad", unit: "%" },
-        ].map((w) => (
-          <div key={w.label} className="rounded-lg border bg-background p-3">
-            <p className="text-xs text-muted-foreground">{w.label}</p>
-            <p className="mt-1 text-xl font-bold tabular-nums text-muted-foreground">
-              — <span className="text-sm font-normal">{w.unit}</span>
+    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${s.style}`}>
+      {s.label}
+    </span>
+  );
+}
+
+function fmtTemp(v: number | null): string {
+  return v === null ? "—" : `${v.toFixed(1)} °C`;
+}
+
+function fmtHum(v: number | null): string {
+  return v === null ? "—" : `${v.toFixed(0)} %`;
+}
+
+// Variables climáticas por intervalo (Open-Meteo). Los datos vienen del backend;
+// aquí solo se presentan, distinguiendo disponibles de pendientes/fallidos.
+function WeatherSection() {
+  const [rows, setRows] = useState<IntervalWeatherRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [recovering, setRecovering] = useState(false);
+  const [recoverMsg, setRecoverMsg] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setRows(await api.listIntervalWeather());
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Error al cargar el clima.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Solo LECTURA al montar: no dispara llamadas a Open-Meteo.
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function onRecover() {
+    setRecovering(true);
+    setRecoverMsg(null);
+    try {
+      const r = await api.recoverWeather();
+      setRecoverMsg(
+        `Revisados ${r.checked} · actualizados ${r.updated} · ` +
+          `pendientes ${r.still_pending} · fallidos ${r.failed}.`,
+      );
+      await load();
+    } catch (e) {
+      setRecoverMsg(
+        e instanceof ApiError ? e.message : "No se pudo recuperar el clima.",
+      );
+    } finally {
+      setRecovering(false);
+    }
+  }
+
+  // Serie para la gráfica temp vs consumo (orden cronológico ascendente).
+  const chart: WeatherConsumptionPoint[] = useMemo(
+    () =>
+      rows.map((w) => ({
+        label: `${formatDateShort(w.start_date)} → ${formatDateShort(w.end_date)}`,
+        kwh: w.consumption_kwh,
+        temp: w.temp_avg_c,
+      })),
+    [rows],
+  );
+
+  const pendingCount = rows.filter(
+    (w) => w.status === "pending" || w.status === "failed",
+  ).length;
+  const hasAnyWeather = rows.some((w) => w.temp_avg_c !== null);
+
+  return (
+    <section className="mt-8">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400">
+            <CloudSun className="h-5 w-5" aria-hidden />
+          </span>
+          <div>
+            <h2 className="text-lg font-semibold">Clima por intervalo</h2>
+            <p className="text-sm text-muted-foreground">
+              Temperatura y humedad del periodo entre lecturas, frente al consumo.
             </p>
           </div>
-        ))}
+        </div>
+        {pendingCount > 0 ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onRecover}
+            disabled={recovering}
+          >
+            {recovering ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <RefreshCw className="h-4 w-4" aria-hidden />
+            )}
+            Recuperar pendientes ({pendingCount})
+          </Button>
+        ) : null}
       </div>
+
+      {recoverMsg ? (
+        <p className="mb-3 text-xs text-muted-foreground">{recoverMsg}</p>
+      ) : null}
+
+      {loading ? (
+        <div className="h-48 animate-pulse rounded-xl border bg-muted/40" aria-hidden />
+      ) : null}
+
+      {!loading && error ? (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+          {error}
+        </div>
+      ) : null}
+
+      {!loading && !error && rows.length === 0 ? (
+        <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
+          Se necesitan al menos dos lecturas para formar un intervalo con clima.
+        </div>
+      ) : null}
+
+      {!loading && !error && rows.length > 0 ? (
+        <div className="space-y-6">
+          {hasAnyWeather ? (
+            <div className="rounded-xl border bg-card p-5 shadow-sm">
+              <h3 className="mb-1 text-base font-semibold">
+                Temperatura vs consumo
+              </h3>
+              <p className="mb-4 text-sm text-muted-foreground">
+                Barras: consumo del intervalo (kWh). Línea: temperatura promedio
+                (°C). Los intervalos sin datos climáticos no trazan línea.
+              </p>
+              <WeatherConsumptionChart data={chart} />
+            </div>
+          ) : (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-muted-foreground">
+              Todavía no hay datos climáticos disponibles para estos intervalos.
+              Usa &quot;Recuperar pendientes&quot; para consultarlos.
+            </div>
+          )}
+
+          <div className="overflow-x-auto rounded-lg border bg-card">
+            <table className="w-full text-sm">
+              <thead className="border-b text-left text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Intervalo</th>
+                  <th className="px-4 py-3 font-medium">Consumo</th>
+                  <th className="px-4 py-3 font-medium">Temp. prom.</th>
+                  <th className="px-4 py-3 font-medium">Máx / mín</th>
+                  <th className="px-4 py-3 font-medium">Humedad</th>
+                  <th className="px-4 py-3 font-medium">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((w) => (
+                  <tr
+                    key={`${w.start_reading_id}-${w.end_reading_id}`}
+                    className="border-b last:border-0"
+                  >
+                    <td className="px-4 py-3">
+                      {formatDate(w.start_date)} – {formatDate(w.end_date)}
+                    </td>
+                    <td className="px-4 py-3">
+                      {w.consumption_kwh === null
+                        ? "—"
+                        : formatKwh(w.consumption_kwh)}
+                    </td>
+                    <td className="px-4 py-3 tabular-nums">{fmtTemp(w.temp_avg_c)}</td>
+                    <td className="px-4 py-3 tabular-nums text-muted-foreground">
+                      {fmtTemp(w.temp_max_c)} / {fmtTemp(w.temp_min_c)}
+                    </td>
+                    <td className="px-4 py-3 tabular-nums">{fmtHum(w.humidity_avg_pct)}</td>
+                    <td className="px-4 py-3">
+                      <WeatherStatusBadge value={w.status} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
       <p className="mt-3 text-xs text-muted-foreground">
-        Pendiente de integrar Open-Meteo. Esta sección está preparada para mostrar
-        los datos reales cuando el backend los exponga; no se usan valores
-        simulados.
+        Fuente: datos meteorológicos de{" "}
+        <a
+          href="https://open-meteo.com"
+          target="_blank"
+          rel="noreferrer"
+          className="underline hover:text-foreground"
+        >
+          Open-Meteo.com
+        </a>{" "}
+        (CC BY 4.0). Ubicación configurada: Ibagué, Tolima.
       </p>
     </section>
   );
