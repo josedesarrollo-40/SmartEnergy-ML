@@ -22,6 +22,46 @@ export interface TariffOut {
   persisted: boolean;
 }
 
+export interface InvoiceOut {
+  id: number;
+  period_start: string;
+  period_end: string;
+  billed_kwh: number;
+  billed_amount: number;
+  issued_date: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface PeriodConsumptionOut {
+  start: string;
+  end: string;
+  kwh: number;
+  estimated: boolean;
+  estimated_fraction: number;
+  sufficient: boolean;
+  estimated_cost: number;
+  currency: string;
+  note: string;
+}
+
+export interface InvoiceComparisonOut {
+  period_start: string;
+  period_end: string;
+  calculated_kwh: number;
+  calculated_cost: number;
+  calculated_sufficient: boolean;
+  calculated_estimated: boolean;
+  billed_kwh: number;
+  billed_amount: number;
+  kwh_diff: number;
+  kwh_diff_pct: number | null;
+  cost_diff: number;
+  cost_diff_pct: number | null;
+  currency: string;
+  note: string;
+}
+
 export interface DataQualityOut {
   total_readings: number;
   first_date: string | null;

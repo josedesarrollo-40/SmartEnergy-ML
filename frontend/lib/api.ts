@@ -1,5 +1,22 @@
 // Cliente HTTP al backend FastAPI. La URL viene de NEXT_PUBLIC_API_URL.
-import type { DataQualityOut, ReadingOut, SummaryOut, TariffOut } from "@/lib/types";
+import type {
+  DataQualityOut,
+  InvoiceComparisonOut,
+  InvoiceOut,
+  PeriodConsumptionOut,
+  ReadingOut,
+  SummaryOut,
+  TariffOut,
+} from "@/lib/types";
+
+export interface InvoiceCreate {
+  period_start: string;
+  period_end: string;
+  billed_kwh: number;
+  billed_amount: number;
+  issued_date?: string | null;
+  notes?: string | null;
+}
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://127.0.0.1:8000";
@@ -102,6 +119,17 @@ export const api = {
   deleteReading: (id: number) => del(`/api/readings/${id}`),
   confirmReadingDate: (id: number) =>
     getJson<ReadingOut>(`/api/readings/${id}/confirm-date`, { method: "PATCH" }),
+  listInvoices: () => getJson<InvoiceOut[]>("/api/invoices"),
+  createInvoice: (payload: InvoiceCreate) =>
+    getJson<InvoiceOut>("/api/invoices", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  deleteInvoice: (id: number) => del(`/api/invoices/${id}`),
+  compareInvoice: (id: number) =>
+    getJson<InvoiceComparisonOut>(`/api/invoices/${id}/comparison`),
+  getMonthly: (year: number, month: number) =>
+    getJson<PeriodConsumptionOut>(`/api/analytics/monthly?year=${year}&month=${month}`),
 };
 
 export { API_URL };

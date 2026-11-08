@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Gauge, LayoutDashboard, Zap } from "lucide-react";
+import { BarChart3, FileText, Gauge, LayoutDashboard, Zap } from "lucide-react";
 
 import { LogoMark } from "@/components/logo";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ const items = [
   { href: "/lecturas", label: "Lecturas", icon: Gauge },
   { href: "/tarifas", label: "Tarifas", icon: Zap },
   { href: "/analitica", label: "Analítica", icon: BarChart3 },
+  { href: "/facturas", label: "Facturas", icon: FileText },
 ];
 
 export function Sidebar() {
