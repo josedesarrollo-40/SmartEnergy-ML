@@ -2,10 +2,12 @@ from datetime import date, datetime, time
 from decimal import Decimal
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
     Numeric,
+    String,
     Time,
     UniqueConstraint,
     func,
@@ -49,6 +51,17 @@ class MeterReading(Base):
     )
     value_kwh: Mapped[Decimal] = mapped_column(KWH_NUMERIC, nullable=False)
     note: Mapped[str | None] = mapped_column(nullable=True)
+    # Procedencia y calidad del dato. Defaults compatibles con el histórico:
+    # las lecturas existentes quedan como import / pending / hora desconocida.
+    source: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default=text("'import'")
+    )  # manual | import | api
+    date_confidence: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default=text("'pending'")
+    )  # verified | confirmed | inferred | pending
+    time_known: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -72,5 +85,23 @@ class DeletedReading(Base):
         DateTime(timezone=True), nullable=True
     )
     deleted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class ReadingCorrection(Base):
+    """Auditoría de correcciones de valor de una lectura. Cada cambio del
+    value_kwh de una lectura existente deja aquí el rastro (valor anterior,
+    nuevo, motivo). El cambio y este registro se hacen en una misma
+    transacción: no hay correcciones silenciosas."""
+
+    __tablename__ = "reading_corrections"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    reading_id: Mapped[int] = mapped_column(nullable=False, index=True)
+    old_value: Mapped[Decimal] = mapped_column(KWH_NUMERIC, nullable=False)
+    new_value: Mapped[Decimal] = mapped_column(KWH_NUMERIC, nullable=False)
+    reason: Mapped[str | None] = mapped_column(nullable=True)
+    corrected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

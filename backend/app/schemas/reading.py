@@ -28,4 +28,19 @@ class ReadingOut(BaseModel):
     reading_time: time
     value_kwh: float
     note: str | None
+    source: str
+    date_confidence: str
+    time_known: bool
     created_at: datetime
+
+
+class ReadingCorrectionIn(BaseModel):
+    new_value: float = Field(ge=0)
+    reason: str | None = None
+
+    @field_validator("new_value")
+    @classmethod
+    def finite(cls, v: float) -> float:
+        if not math.isfinite(v):
+            raise ValueError("new_value debe ser finito.")
+        return v

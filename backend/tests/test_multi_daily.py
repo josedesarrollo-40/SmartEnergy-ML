@@ -52,6 +52,47 @@ def test_backward_compatible_without_time(client):
     assert r.json()["reading_time"] == "00:00:00"
 
 
+def test_manual_reading_provenance(client):
+    # Con hora: source=manual, confirmed, time_known=True.
+    r = _post(client, "2026-08-26", 2639, "08:00:00")
+    b = r.json()
+    assert b["source"] == "manual"
+    assert b["date_confidence"] == "confirmed"
+    assert b["time_known"] is True
+
+
+def test_manual_reading_without_time_is_time_unknown(client):
+    r = _post(client, "2026-08-26", 2639)  # sin hora
+    b = r.json()
+    assert b["time_known"] is False
+    assert b["date_confidence"] == "confirmed"  # nunca verified automático
+
+
+def test_correct_reading_value_records_correction(client):
+    rid = _post(client, "2026-08-26", 2639, "08:00:00").json()["id"]
+    r = client.patch(f"/api/readings/{rid}/value",
+                     json={"new_value": 2650, "reason": "ajuste manual"})
+    assert r.status_code == 200
+    assert r.json()["value_kwh"] == 2650.0
+
+
+def test_correct_reading_same_value_rejected(client):
+    rid = _post(client, "2026-08-26", 2639, "08:00:00").json()["id"]
+    r = client.patch(f"/api/readings/{rid}/value", json={"new_value": 2639})
+    assert r.status_code == 400
+
+
+def test_data_quality_endpoint(client):
+    _post(client, "2026-08-01", 100, "08:00:00")
+    _post(client, "2026-08-05", 140, "08:00:00")  # hueco de 4 días
+    q = client.get("/api/analytics/data-quality").json()
+    assert q["total_readings"] == 2
+    assert q["observed_days"] == 2
+    assert q["interpolated_days"] == 3   # 02,03,04 sin lectura
+    assert q["time_known_count"] == 2
+    assert len(q["irregular_intervals"]) == 1  # intervalo de 4 días
+
+
 def test_multi_day_and_intraday_mix(client):
     _post(client, "2026-08-26", 2639, "08:00:00")
     _post(client, "2026-08-26", 2647, "18:00:00")  # +8 intradía

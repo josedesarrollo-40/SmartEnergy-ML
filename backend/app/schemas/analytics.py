@@ -38,3 +38,18 @@ class PredictionOut(BaseModel):
     method: str         # "statistical" o "ml"
     confidence_note: str
     points: list[PredictionPoint]
+
+
+class DataQualityOut(BaseModel):
+    total_readings: int
+    first_date: date | None
+    last_date: date | None
+    span_days: int
+    observed_days: int
+    interpolated_days: int
+    missing_days: int
+    time_known_count: int
+    confidence_counts: dict[str, int]
+    source_counts: dict[str, int]
+    irregular_intervals: list[dict]
+    pending_or_inferred: int

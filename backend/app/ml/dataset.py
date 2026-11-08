@@ -61,6 +61,19 @@ def build_daily_series(readings: list[Reading]) -> list[DailyPoint]:
     return out
 
 
+def reading_from_orm(mr) -> Reading:
+    """Construye un Reading del dataset a partir de un MeterReading de la base,
+    usando la metadata de procedencia ALMACENADA (source, date_confidence,
+    time_known) en vez de inferirla de un CSV externo."""
+    from datetime import datetime as _dt
+    return Reading(
+        dt=_dt.combine(mr.reading_date, mr.reading_time),
+        value_kwh=float(mr.value_kwh),
+        provenance=mr.date_confidence,   # verified | confirmed | inferred | pending
+        has_real_time=bool(mr.time_known),
+    )
+
+
 def classify_counts(readings: list[Reading]) -> dict[str, int]:
     """Cuenta lecturas por procedencia y por disponibilidad de hora real."""
     counts: dict[str, int] = {}

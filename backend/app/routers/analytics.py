@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.reading import MeterReading
-from app.schemas.analytics import SummaryOut
+from app.schemas.analytics import DataQualityOut, SummaryOut
+from app.services.data_quality import build_quality_report
 from app.services.consumption import (
     avg_daily_kwh,
     cost_by_period,
@@ -70,3 +71,11 @@ def summary(db: Session = Depends(get_db)):
         monthly_projection_kwh=proj_kwh,
         monthly_projection_cost=proj_cost,
     )
+
+
+@router.get("/data-quality", response_model=DataQualityOut)
+def data_quality(db: Session = Depends(get_db)):
+    """Reporte de calidad del histórico: días observados vs estimados, fechas
+    pendientes, intervalos irregulares. Solo lectura, no modifica nada."""
+    readings = _ordered_readings(db)
+    return build_quality_report(readings)

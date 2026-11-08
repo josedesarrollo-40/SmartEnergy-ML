@@ -5,9 +5,16 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from decimal import Decimal
+
 from app.db.session import get_db
-from app.models.reading import MIDNIGHT, DeletedReading, MeterReading
-from app.schemas.reading import ReadingCreate, ReadingOut
+from app.models.reading import (
+    MIDNIGHT,
+    DeletedReading,
+    MeterReading,
+    ReadingCorrection,
+)
+from app.schemas.reading import ReadingCorrectionIn, ReadingCreate, ReadingOut
 from app.services.validation import ReadingValidationError, validate_new_reading
 
 router = APIRouter(prefix="/api/readings", tags=["readings"])
@@ -40,11 +47,17 @@ def create_reading(payload: ReadingCreate, db: Session = Depends(get_db)):
     except ReadingValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
+    # Procedencia: lectura manual desde el formulario. La fecha la confirma el
+    # usuario (confirmed), nunca verified automático. time_known solo si vino
+    # una hora real en el payload.
     reading = MeterReading(
         reading_date=payload.reading_date,
         reading_time=reading_time,
         value_kwh=payload.value_kwh,
         note=payload.note,
+        source="manual",
+        date_confidence="confirmed",
+        time_known=payload.reading_time is not None,
     )
     db.add(reading)
     try:
@@ -78,6 +91,39 @@ def list_readings(
     if end:
         stmt = stmt.where(MeterReading.reading_date <= end)
     return db.execute(stmt).scalars().all()
+
+
+@router.patch("/{reading_id}/value", response_model=ReadingOut)
+def correct_reading_value(
+    reading_id: int, payload: ReadingCorrectionIn, db: Session = Depends(get_db)
+):
+    """Corrige el valor de una lectura. En una MISMA transacción: cambia el
+    value_kwh y registra la corrección en reading_corrections (valor anterior,
+    nuevo, motivo). No hay correcciones silenciosas."""
+    reading = db.get(MeterReading, reading_id)
+    if reading is None:
+        raise HTTPException(status_code=404, detail="Lectura no encontrada.")
+
+    old = reading.value_kwh
+    new = Decimal(str(payload.new_value))
+    if new == old:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El nuevo valor es igual al actual.",
+        )
+
+    db.add(
+        ReadingCorrection(
+            reading_id=reading.id,
+            old_value=old,
+            new_value=new,
+            reason=payload.reason,
+        )
+    )
+    reading.value_kwh = new
+    db.commit()  # cambio + auditoría en la misma transacción
+    db.refresh(reading)
+    return reading
 
 
 @router.delete("/{reading_id}", status_code=status.HTTP_204_NO_CONTENT)
