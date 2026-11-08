@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { api, ApiError, type ReadingCreate } from "@/lib/api";
@@ -9,7 +9,11 @@ import { formatDate, formatKwh } from "@/lib/format";
 import type { ReadingOut } from "@/lib/types";
 
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  // Fecha LOCAL (no UTC): toISOString daría el día siguiente por la noche en -05.
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
 export default function LecturasPage() {
@@ -33,6 +37,9 @@ export default function LecturasPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [onlyPending, setOnlyPending] = useState(false);
+  const [page, setPage] = useState(1);
+
+  const PAGE_SIZE = 10;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,18 +62,38 @@ export default function LecturasPage() {
     setForm((f) => (f.reading_date ? f : { ...f, reading_date: todayISO() }));
   }, []);
 
-  // Consumo por intervalo: diferencia con la lectura anterior (orden ascendente).
-  const rows = useMemo(() => {
-    const all = readings.map((r, i) => {
+  // Consumo por intervalo: diferencia con la lectura anterior (orden ascendente,
+  // tal como llega del backend). Luego se ordena descendente para el historial.
+  const filtered = useMemo(() => {
+    const withConsumo = readings.map((r, i) => {
       const prev = i > 0 ? readings[i - 1] : null;
       const consumo =
         prev && r.value_kwh >= prev.value_kwh ? r.value_kwh - prev.value_kwh : null;
       return { reading: r, consumo };
     });
+    // Orden descendente por fecha + hora (más reciente primero).
+    withConsumo.sort((a, b) => {
+      const ka = `${a.reading.reading_date} ${a.reading.reading_time ?? ""}`;
+      const kb = `${b.reading.reading_date} ${b.reading.reading_time ?? ""}`;
+      return kb.localeCompare(ka);
+    });
     return onlyPending
-      ? all.filter((x) => x.reading.date_confidence === "pending")
-      : all;
+      ? withConsumo.filter((x) => x.reading.date_confidence === "pending")
+      : withConsumo;
   }, [readings, onlyPending]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const rows = useMemo(
+    () =>
+      filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filtered, currentPage],
+  );
+
+  // Al cambiar el filtro, volver a la primera página.
+  useEffect(() => {
+    setPage(1);
+  }, [onlyPending]);
 
   async function onConfirm(r: ReadingOut) {
     const ok = window.confirm(
@@ -304,7 +331,13 @@ export default function LecturasPage() {
           </div>
         ) : null}
 
-        {!loading && !listError && readings.length > 0 ? (
+        {!loading && !listError && readings.length > 0 && filtered.length === 0 ? (
+          <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
+            No hay lecturas pendientes con el filtro actual.
+          </div>
+        ) : null}
+
+        {!loading && !listError && filtered.length > 0 ? (
           <div className="overflow-x-auto rounded-lg border bg-card">
             <table className="w-full text-sm">
               <thead className="border-b text-left text-muted-foreground">
@@ -368,6 +401,39 @@ export default function LecturasPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        ) : null}
+
+        {/* Paginación */}
+        {!loading && !listError && filtered.length > 0 ? (
+          <div className="mt-3 flex flex-col items-center justify-between gap-3 text-sm sm:flex-row">
+            <p className="text-muted-foreground">
+              Página <span className="font-medium text-foreground">{currentPage}</span>{" "}
+              de <span className="font-medium text-foreground">{totalPages}</span>
+              {" · "}
+              {filtered.length}{" "}
+              {filtered.length === 1 ? "registro" : "registros"}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+              >
+                <ChevronLeft className="h-4 w-4" aria-hidden />
+                Anterior
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+              >
+                Siguiente
+                <ChevronRight className="h-4 w-4" aria-hidden />
+              </Button>
+            </div>
           </div>
         ) : null}
       </section>

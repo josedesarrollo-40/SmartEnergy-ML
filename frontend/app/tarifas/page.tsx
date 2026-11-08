@@ -9,7 +9,11 @@ import { formatCOP, formatDate } from "@/lib/format";
 import type { TariffOut } from "@/lib/types";
 
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  // Fecha LOCAL (no UTC): toISOString daría el día siguiente por la noche en -05.
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
 export default function TarifasPage() {

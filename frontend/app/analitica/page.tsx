@@ -9,11 +9,13 @@ import {
   type CumulativePoint,
   type IntervalPoint,
 } from "@/components/charts/consumption-charts";
+import { CloudSun } from "lucide-react";
+
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { api, ApiError } from "@/lib/api";
 import { formatCOP, formatDate, formatDateShort, formatKwh } from "@/lib/format";
-import type { ReadingOut, SummaryOut } from "@/lib/types";
+import type { PeriodConsumptionOut, ReadingOut, SummaryOut } from "@/lib/types";
 
 export default function AnaliticaPage() {
   const [summary, setSummary] = useState<SummaryOut | null>(null);
@@ -23,6 +25,9 @@ export default function AnaliticaPage() {
 
   const [filters, setFilters] = useState({ start: "", end: "" });
   const [applied, setApplied] = useState<{ start: string; end: string } | null>(null);
+  // Consumo/costo del rango filtrado: lo calcula el backend con tarifa
+  // histórica. Solo se consulta cuando hay un rango completo (start y end).
+  const [period, setPeriod] = useState<PeriodConsumptionOut | null>(null);
 
   const load = useCallback(async (start?: string, end?: string) => {
     setLoading(true);
@@ -34,6 +39,17 @@ export default function AnaliticaPage() {
       ]);
       setSummary(s);
       setReadings(r);
+      // El costo del rango lo entrega el backend (respeta la tarifa vigente en
+      // cada tramo). Requiere ambos extremos del rango.
+      if (start && end) {
+        try {
+          setPeriod(await api.getPeriod(start, end));
+        } catch {
+          setPeriod(null);
+        }
+      } else {
+        setPeriod(null);
+      }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Error al cargar la analítica.");
     } finally {
@@ -145,12 +161,52 @@ export default function AnaliticaPage() {
         ) : null}
       </form>
 
+      {/* Costo del rango filtrado, calculado por el backend con tarifa histórica. */}
+      {applied && period ? (
+        <div className="mb-4 rounded-xl border bg-card p-5 shadow-sm">
+          <h2 className="mb-1 text-lg font-semibold">
+            Costo del rango seleccionado
+          </h2>
+          <p className="mb-4 text-sm text-muted-foreground">
+            {formatDate(period.start)} – {formatDate(period.end)}. Cada tramo se
+            cobra con la tarifa vigente en su fecha (cálculo del backend).
+          </p>
+          {period.sufficient ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Consumo</p>
+                <p className="text-xl font-bold tabular-nums">
+                  {formatKwh(period.kwh)}
+                </p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Costo estimado</p>
+                <p className="text-xl font-bold tabular-nums">
+                  {formatCOP(period.estimated_cost)}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-muted-foreground">
+              Información insuficiente para calcular este rango con las lecturas
+              disponibles.
+            </p>
+          )}
+          {period.sufficient && period.estimated ? (
+            <p className="mt-3 text-xs text-amber-600 dark:text-amber-500">
+              Incluye interpolación en los bordes:{" "}
+              {Math.round(period.estimated_fraction * 100)}% del consumo es estimado.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       {applied ? (
         <div className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-muted-foreground">
-          El consumo del primer intervalo mostrado se calcula a partir de la primera
-          lectura dentro del rango; la lectura anterior al rango no se incluye. Un
-          endpoint que entregue esa lectura previa permitiría calcular ese primer
-          intervalo con exactitud.
+          El consumo del primer intervalo mostrado en las gráficas se calcula a partir
+          de la primera lectura dentro del rango; la lectura anterior al rango no se
+          incluye. El costo del rango (arriba) sí lo entrega el backend con las
+          tarifas históricas correctas.
         </div>
       ) : null}
 
@@ -195,6 +251,47 @@ export default function AnaliticaPage() {
           </section>
         </div>
       ) : null}
+
+      <WeatherSection />
     </div>
+  );
+}
+
+// Estructura preparada para variables climáticas (Open-Meteo). Todavía no hay
+// datos: el backend no expone clima y no se muestran valores ficticios.
+function WeatherSection() {
+  return (
+    <section className="mt-8 rounded-xl border border-dashed bg-card p-5 shadow-sm">
+      <div className="mb-3 flex items-center gap-2">
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400">
+          <CloudSun className="h-5 w-5" aria-hidden />
+        </span>
+        <div>
+          <h2 className="text-lg font-semibold">Variables climáticas</h2>
+          <p className="text-sm text-muted-foreground">
+            Temperatura y humedad para contrastar con el consumo.
+          </p>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {[
+          { label: "Temperatura", unit: "°C" },
+          { label: "Temp. máx / mín", unit: "°C" },
+          { label: "Humedad", unit: "%" },
+        ].map((w) => (
+          <div key={w.label} className="rounded-lg border bg-background p-3">
+            <p className="text-xs text-muted-foreground">{w.label}</p>
+            <p className="mt-1 text-xl font-bold tabular-nums text-muted-foreground">
+              — <span className="text-sm font-normal">{w.unit}</span>
+            </p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-muted-foreground">
+        Pendiente de integrar Open-Meteo. Esta sección está preparada para mostrar
+        los datos reales cuando el backend los exponga; no se usan valores
+        simulados.
+      </p>
+    </section>
   );
 }

@@ -130,6 +130,12 @@ export const api = {
     getJson<InvoiceComparisonOut>(`/api/invoices/${id}/comparison`),
   getMonthly: (year: number, month: number) =>
     getJson<PeriodConsumptionOut>(`/api/analytics/monthly?year=${year}&month=${month}`),
+  // Consumo y costo de un rango arbitrario. El backend aplica la tarifa
+  // histórica vigente en cada tramo; el frontend NO recalcula el costo.
+  getPeriod: (start: string, end: string) =>
+    getJson<PeriodConsumptionOut>(
+      `/api/analytics/period?start=${start}&end=${end}`,
+    ),
 };
 
 export { API_URL };

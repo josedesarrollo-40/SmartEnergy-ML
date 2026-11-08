@@ -77,6 +77,17 @@ export interface DataQualityOut {
   pending_or_inferred: number;
 }
 
+// Estructura preparada para variables climáticas (Open-Meteo), aún sin
+// implementar. El backend todavía NO expone un endpoint de clima: no se
+// muestran valores ficticios hasta que exista ese contrato.
+export interface WeatherPoint {
+  date: string; // YYYY-MM-DD
+  temp_c: number | null; // temperatura media (°C)
+  temp_min_c: number | null;
+  temp_max_c: number | null;
+  humidity_pct: number | null; // humedad relativa media (%)
+}
+
 export interface SummaryOut {
   last_reading_date: string | null;
   last_reading_value: number | null;
