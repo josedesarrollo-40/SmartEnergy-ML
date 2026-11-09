@@ -23,8 +23,16 @@ import {
 } from "@/components/charts/consumption-charts";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
+import { LoadingOverlay } from "@/components/ui/loading-overlay";
+import { PaginationBar, usePagination } from "@/components/ui/pagination";
 import { api, ApiError } from "@/lib/api";
-import { formatCOP, formatDate, formatDateShort, formatKwh } from "@/lib/format";
+import {
+  formatCOP,
+  formatDate,
+  formatDateShort,
+  formatKwh,
+  monthLabelFrom,
+} from "@/lib/format";
 import type {
   IntervalWeatherRow,
   PeriodConsumptionOut,
@@ -35,8 +43,10 @@ import type {
 export default function AnaliticaPage() {
   const [summary, setSummary] = useState<SummaryOut | null>(null);
   const [readings, setReadings] = useState<ReadingOut[]>([]);
+  const [monthToDate, setMonthToDate] = useState<PeriodConsumptionOut | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const [filters, setFilters] = useState({ start: "", end: "" });
   const [applied, setApplied] = useState<{ start: string; end: string } | null>(null);
@@ -48,12 +58,14 @@ export default function AnaliticaPage() {
     setLoading(true);
     setError(null);
     try {
-      const [s, r] = await Promise.all([
+      const [s, r, m] = await Promise.all([
         api.getSummary(),
         api.listReadingsRange(start, end),
+        api.getCurrentMonthToDate().catch(() => null),
       ]);
       setSummary(s);
       setReadings(r);
+      setMonthToDate(m);
       // El costo del rango lo entrega el backend (respeta la tarifa vigente en
       // cada tramo). Requiere ambos extremos del rango.
       if (start && end) {
@@ -74,7 +86,14 @@ export default function AnaliticaPage() {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, reloadKey]);
+
+  const periodKwh =
+    monthToDate && monthToDate.sufficient ? monthToDate.kwh : summary?.total_kwh ?? 0;
+  const periodHint =
+    monthToDate && monthToDate.sufficient
+      ? `Del 1 de ${monthLabelFrom(monthToDate.start)} a hoy`
+      : "Acumulado del mes en curso";
 
   // Intervalos de consumo (diferencia entre lecturas consecutivas del conjunto).
   const intervals: IntervalPoint[] = useMemo(() => {
@@ -123,6 +142,13 @@ export default function AnaliticaPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
+      <LoadingOverlay
+        open={loading && !summary}
+        message="Cargando la analítica…"
+        error={!loading && error && !summary ? error : null}
+        onRetry={() => setReloadKey((k) => k + 1)}
+      />
+
       <header className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">Analítica</h1>
         <p className="text-sm text-muted-foreground">
@@ -133,7 +159,7 @@ export default function AnaliticaPage() {
       {/* Indicadores (del resumen global) */}
       {summary ? (
         <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <StatCard label="Consumo del periodo" value={formatKwh(summary.total_kwh)} icon={Activity} accent="green" />
+          <StatCard label="Consumo del periodo" value={formatKwh(periodKwh)} hint={periodHint} icon={Activity} accent="green" />
           <StatCard label="Promedio diario" value={`${formatKwh(summary.avg_daily_kwh)}/día`} icon={Gauge} accent="blue" />
           <StatCard label="Costo estimado" value={formatCOP(summary.estimated_cost)} icon={Coins} accent="amber" />
           <StatCard label="Lecturas registradas" value={String(readings.length)} icon={ListOrdered} accent="blue" />
@@ -369,6 +395,9 @@ function WeatherSection() {
   ).length;
   const hasAnyWeather = rows.some((w) => w.temp_avg_c !== null);
 
+  // Paginación de la tabla de intervalos (10 por página, como Lecturas).
+  const pager = usePagination(rows, 10, rows.length);
+
   return (
     <section className="mt-8">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -442,27 +471,27 @@ function WeatherSection() {
           )}
 
           <div className="overflow-x-auto rounded-lg border bg-card">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[640px] text-sm">
               <thead className="border-b text-left text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Intervalo</th>
-                  <th className="px-4 py-3 font-medium">Consumo</th>
-                  <th className="px-4 py-3 font-medium">Temp. prom.</th>
-                  <th className="px-4 py-3 font-medium">Máx / mín</th>
-                  <th className="px-4 py-3 font-medium">Humedad</th>
-                  <th className="px-4 py-3 font-medium">Estado</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">Intervalo</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">Consumo</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">Temp. prom.</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">Máx / mín</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">Humedad</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">Estado</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((w) => (
+                {pager.rows.map((w) => (
                   <tr
                     key={`${w.start_reading_id}-${w.end_reading_id}`}
                     className="border-b last:border-0"
                   >
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       {formatDate(w.start_date)} – {formatDate(w.end_date)}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       {w.consumption_kwh === null
                         ? "—"
                         : formatKwh(w.consumption_kwh)}
@@ -480,6 +509,16 @@ function WeatherSection() {
               </tbody>
             </table>
           </div>
+          {rows.length > 10 ? (
+            <PaginationBar
+              page={pager.page}
+              totalPages={pager.totalPages}
+              total={pager.total}
+              onPrev={pager.goPrev}
+              onNext={pager.goNext}
+              unit={["intervalo", "intervalos"]}
+            />
+          ) : null}
         </div>
       ) : null}
 

@@ -1,20 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { LoadingOverlay } from "@/components/ui/loading-overlay";
+import { PaginationBar, usePagination } from "@/components/ui/pagination";
 import { api, ApiError, type ReadingCreate } from "@/lib/api";
-import { formatDate, formatKwh } from "@/lib/format";
+import { formatDate, formatKwh, localTodayISO } from "@/lib/format";
 import type { ReadingOut } from "@/lib/types";
 
-function todayISO(): string {
-  // Fecha LOCAL (no UTC): toISOString daría el día siguiente por la noche en -05.
-  const d = new Date();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${mm}-${dd}`;
-}
+const todayISO = localTodayISO;
 
 export default function LecturasPage() {
   const [readings, setReadings] = useState<ReadingOut[]>([]);
@@ -37,9 +33,6 @@ export default function LecturasPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [onlyPending, setOnlyPending] = useState(false);
-  const [page, setPage] = useState(1);
-
-  const PAGE_SIZE = 10;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -82,18 +75,9 @@ export default function LecturasPage() {
       : withConsumo;
   }, [readings, onlyPending]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const rows = useMemo(
-    () =>
-      filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
-    [filtered, currentPage],
-  );
-
-  // Al cambiar el filtro, volver a la primera página.
-  useEffect(() => {
-    setPage(1);
-  }, [onlyPending]);
+  // Paginación 10/página; conserva filtro (onlyPending) al cambiar de página.
+  const pager = usePagination(filtered, 10, onlyPending);
+  const rows = pager.rows;
 
   async function onConfirm(r: ReadingOut) {
     const ok = window.confirm(
@@ -176,6 +160,13 @@ export default function LecturasPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
+      <LoadingOverlay
+        open={loading && readings.length === 0}
+        message="Cargando lecturas…"
+        error={!loading && listError && readings.length === 0 ? listError : null}
+        onRetry={load}
+      />
+
       <header className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">Lecturas</h1>
         <p className="text-sm text-muted-foreground">
@@ -339,22 +330,22 @@ export default function LecturasPage() {
 
         {!loading && !listError && filtered.length > 0 ? (
           <div className="overflow-x-auto rounded-lg border bg-card">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[720px] text-sm">
               <thead className="border-b text-left text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Fecha</th>
-                  <th className="px-4 py-3 font-medium">Hora</th>
-                  <th className="px-4 py-3 font-medium">Lectura (kWh)</th>
-                  <th className="px-4 py-3 font-medium">Consumo</th>
-                  <th className="px-4 py-3 font-medium">Confianza</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">Fecha</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">Hora</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">Lectura (kWh)</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">Consumo</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">Confianza</th>
                   <th className="px-4 py-3 font-medium">Nota</th>
-                  <th className="px-4 py-3 font-medium text-right">Acción</th>
+                  <th className="px-4 py-3 font-medium text-right whitespace-nowrap">Acción</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map(({ reading: r, consumo }) => (
                   <tr key={r.id} className="border-b last:border-0">
-                    <td className="px-4 py-3">{formatDate(r.reading_date)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{formatDate(r.reading_date)}</td>
                     <td className="px-4 py-3 tabular-nums">
                       {r.reading_time ? r.reading_time.slice(0, 5) : "—"}
                     </td>
@@ -406,35 +397,13 @@ export default function LecturasPage() {
 
         {/* Paginación */}
         {!loading && !listError && filtered.length > 0 ? (
-          <div className="mt-3 flex flex-col items-center justify-between gap-3 text-sm sm:flex-row">
-            <p className="text-muted-foreground">
-              Página <span className="font-medium text-foreground">{currentPage}</span>{" "}
-              de <span className="font-medium text-foreground">{totalPages}</span>
-              {" · "}
-              {filtered.length}{" "}
-              {filtered.length === 1 ? "registro" : "registros"}
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage <= 1}
-              >
-                <ChevronLeft className="h-4 w-4" aria-hidden />
-                Anterior
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage >= totalPages}
-              >
-                Siguiente
-                <ChevronRight className="h-4 w-4" aria-hidden />
-              </Button>
-            </div>
-          </div>
+          <PaginationBar
+            page={pager.page}
+            totalPages={pager.totalPages}
+            total={pager.total}
+            onPrev={pager.goPrev}
+            onNext={pager.goNext}
+          />
         ) : null}
       </section>
     </div>

@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { LoadingOverlay } from "@/components/ui/loading-overlay";
+import { PaginationBar, usePagination } from "@/components/ui/pagination";
 import { api, ApiError, type InvoiceCreate } from "@/lib/api";
 import { formatCOP, formatDate, formatKwh } from "@/lib/format";
 import type { InvoiceComparisonOut, InvoiceOut, PeriodConsumptionOut } from "@/lib/types";
@@ -33,6 +35,14 @@ export default function FacturasPage() {
 
   const [comparison, setComparison] = useState<InvoiceComparisonOut | null>(null);
   const [comparingId, setComparingId] = useState<number | null>(null);
+
+  // Orden estable: período más reciente primero. Se conserva al paginar.
+  const sorted = useMemo(
+    () =>
+      [...invoices].sort((a, b) => b.period_start.localeCompare(a.period_start)),
+    [invoices],
+  );
+  const pager = usePagination(sorted, 10, sorted.length);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -127,6 +137,13 @@ export default function FacturasPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
+      <LoadingOverlay
+        open={loading && invoices.length === 0}
+        message="Cargando facturas…"
+        error={!loading && listError && invoices.length === 0 ? listError : null}
+        onRetry={load}
+      />
+
       <header className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">Facturas</h1>
         <p className="text-sm text-muted-foreground">
@@ -204,23 +221,23 @@ export default function FacturasPage() {
         ) : null}
         {!loading && invoices.length > 0 ? (
           <div className="overflow-x-auto rounded-lg border bg-card">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[560px] text-sm">
               <thead className="border-b text-left text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Período</th>
-                  <th className="px-4 py-3 font-medium">kWh facturado</th>
-                  <th className="px-4 py-3 font-medium">Valor</th>
-                  <th className="px-4 py-3 font-medium text-right">Acciones</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">Período</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">kWh facturado</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">Valor</th>
+                  <th className="px-4 py-3 font-medium text-right whitespace-nowrap">Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {invoices.map((inv) => (
+                {pager.rows.map((inv) => (
                   <tr key={inv.id} className="border-b last:border-0">
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       {formatDate(inv.period_start)} – {formatDate(inv.period_end)}
                     </td>
-                    <td className="px-4 py-3">{formatKwh(inv.billed_kwh)}</td>
-                    <td className="px-4 py-3">{formatCOP(inv.billed_amount)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{formatKwh(inv.billed_kwh)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{formatCOP(inv.billed_amount)}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <Button variant="outline" size="sm" onClick={() => onCompare(inv)}
@@ -242,6 +259,17 @@ export default function FacturasPage() {
               </tbody>
             </table>
           </div>
+        ) : null}
+
+        {!loading && invoices.length > 10 ? (
+          <PaginationBar
+            page={pager.page}
+            totalPages={pager.totalPages}
+            total={pager.total}
+            onPrev={pager.goPrev}
+            onNext={pager.goNext}
+            unit={["factura", "facturas"]}
+          />
         ) : null}
 
         {comparison ? <ComparisonCard c={comparison} /> : null}

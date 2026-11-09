@@ -14,20 +14,25 @@ import {
 } from "lucide-react";
 
 import { StatCard } from "@/components/stat-card";
+import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { api, ApiError } from "@/lib/api";
-import { formatCOP, formatDate, formatKwh } from "@/lib/format";
-import type { DataQualityOut, SummaryOut } from "@/lib/types";
+import { formatCOP, formatDate, formatKwh, monthLabelFrom } from "@/lib/format";
+import type { DataQualityOut, PeriodConsumptionOut, SummaryOut } from "@/lib/types";
 
 export default function DashboardPage() {
   const [data, setData] = useState<SummaryOut | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [quality, setQuality] = useState<DataQualityOut | null>(null);
+  // Consumo acumulado del mes en curso (día 1 → hoy), calculado al vuelo.
+  const [monthToDate, setMonthToDate] = useState<PeriodConsumptionOut | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     setError(null);
+    setMonthToDate(null);
     api
       .getSummary()
       .then((d) => {
@@ -38,6 +43,15 @@ export default function DashboardPage() {
       })
       .finally(() => {
         if (active) setLoading(false);
+      });
+    // Consumo del mes en curso (independiente: su error no rompe el dashboard).
+    api
+      .getCurrentMonthToDate()
+      .then((p) => {
+        if (active) setMonthToDate(p);
+      })
+      .catch(() => {
+        if (active) setMonthToDate(null);
       });
     // Calidad de datos (independiente: su error no rompe el dashboard).
     api
@@ -51,12 +65,31 @@ export default function DashboardPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [reloadKey]);
 
   const hasReadings = data?.last_reading_date != null;
 
+  // Valor y pie del indicador "Consumo del periodo": acumulado del mes actual
+  // hasta hoy. Si el rango no es suficiente, cae al total como referencia.
+  const periodKwh =
+    monthToDate && monthToDate.sufficient ? monthToDate.kwh : data?.total_kwh ?? 0;
+  const periodHint = monthToDate
+    ? monthToDate.sufficient
+      ? `Del 1 de ${monthLabelFrom(monthToDate.start)} a hoy`
+      : "Sin datos suficientes este mes"
+    : undefined;
+
   return (
     <div className="mx-auto max-w-5xl">
+      {/* Modal de carga: cubre la espera inicial del backend (evita página en
+          blanco) y ofrece reintentar si falla. */}
+      <LoadingOverlay
+        open={loading || (!!error && !data)}
+        message="Cargando el resumen…"
+        error={!loading ? error : null}
+        onRetry={() => setReloadKey((k) => k + 1)}
+      />
+
       <header className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-sm text-muted-foreground">
@@ -98,7 +131,8 @@ export default function DashboardPage() {
           />
           <StatCard
             label="Consumo del periodo"
-            value={formatKwh(data.total_kwh)}
+            value={formatKwh(periodKwh)}
+            hint={periodHint}
             icon={Activity}
             accent="green"
           />

@@ -1,4 +1,5 @@
 // Cliente HTTP al backend FastAPI. La URL viene de NEXT_PUBLIC_API_URL.
+import { localTodayISO } from "@/lib/format";
 import type {
   DataQualityOut,
   IntervalWeatherRow,
@@ -132,6 +133,16 @@ export const api = {
     getJson<InvoiceComparisonOut>(`/api/invoices/${id}/comparison`),
   getMonthly: (year: number, month: number) =>
     getJson<PeriodConsumptionOut>(`/api/analytics/monthly?year=${year}&month=${month}`),
+  // Consumo acumulado del mes EN CURSO: desde el día 1 del mes hasta la fecha
+  // indicada (hoy por defecto). Reutiliza /period, que respeta tarifa histórica
+  // y marca "sufficient"/"estimated". No es el acumulado histórico.
+  getCurrentMonthToDate: (today?: string) => {
+    const d = today ?? localTodayISO();
+    const start = `${d.slice(0, 7)}-01`; // YYYY-MM-01
+    return getJson<PeriodConsumptionOut>(
+      `/api/analytics/period?start=${start}&end=${d}`,
+    );
+  },
   // Consumo y costo de un rango arbitrario. El backend aplica la tarifa
   // histórica vigente en cada tramo; el frontend NO recalcula el costo.
   getPeriod: (start: string, end: string) =>

@@ -4,17 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import { Info, Loader2, Save } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { api, ApiError, type TariffUpdate } from "@/lib/api";
-import { formatCOP, formatDate } from "@/lib/format";
+import { formatCOP, formatDate, localTodayISO } from "@/lib/format";
 import type { TariffOut } from "@/lib/types";
 
-function todayISO(): string {
-  // Fecha LOCAL (no UTC): toISOString daría el día siguiente por la noche en -05.
-  const d = new Date();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${mm}-${dd}`;
-}
+const todayISO = localTodayISO;
 
 export default function TarifasPage() {
   const [tariff, setTariff] = useState<TariffOut | null>(null);
@@ -80,6 +75,13 @@ export default function TarifasPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
+      <LoadingOverlay
+        open={loading && !tariff}
+        message="Cargando la tarifa…"
+        error={!loading && loadError && !tariff ? loadError : null}
+        onRetry={load}
+      />
+
       <header className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">Tarifas</h1>
         <p className="text-sm text-muted-foreground">
